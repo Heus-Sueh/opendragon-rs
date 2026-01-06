@@ -81,7 +81,7 @@ Example:
 This will switch to profile 3 (starting from zero) and change light mode to wave with brightness of 2 and speed of 0
 
 ## Issues
-- Functions are to big, break them into smaller functions
+- Functions are too big, break them into smaller functions
 - UDEV rule doesn't work and I need help because I am not experienced with it
 
 ## Contributing
