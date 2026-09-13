@@ -1,0 +1,30 @@
+[device]
+name = "Redragon Kumara Pro K552RGB-PRO"
+vendor_id = 0x0c45
+product_id = 0x5004
+manufacturer = "SONiX"
+product = "USB DEVICE"
+mcu_family = "Sonix SN32F24x / EVision"
+bus = "USB"
+release_number = 0x0105
+
+[interfaces.0]
+type = "Standard Keyboard + Feature Report"
+usage_page = 0x0001
+usage = 0x0006
+endpoints = ["0x81 (Interrupt IN, 8 bytes)"]
+feature_report_size_bytes = 64
+
+[interfaces.1]
+type = "NKRO + Vendor Configuration"
+usage_page = 0x0001
+usage = 0x0006
+endpoints = ["0x82 (Interrupt IN, 64 bytes)"]
+report_ids = [1, 2, 3, 4]
+
+[interfaces.1.report_id_4]
+usage_page = 0xff1c
+usage = 0x0092
+type = "Vendor Defined Configuration Protocol"
+output_report_size_bytes = 64
+input_report_size_bytes = 64
