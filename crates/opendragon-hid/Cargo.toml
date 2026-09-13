@@ -1,0 +1,16 @@
+[package]
+name = "opendragon-hid"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "HID transport, device enumeration, sysfs inspection, and non-destructive probing for OpenDragon"
+
+[dependencies]
+opendragon-core = { path = "../opendragon-core" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+hidapi.workspace = true
