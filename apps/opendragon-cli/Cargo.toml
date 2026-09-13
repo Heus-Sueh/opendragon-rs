@@ -1,0 +1,24 @@
+[package]
+name = "opendragon-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Command-line interface for device discovery, safe probing, and configuring Redragon peripherals"
+
+[[bin]]
+name = "opendragon"
+path = "src/main.rs"
+
+[dependencies]
+opendragon-core = { path = "../../crates/opendragon-core" }
+opendragon-hid = { path = "../../crates/opendragon-hid" }
+opendragon-protocol = { path = "../../crates/opendragon-protocol" }
+opendragon-devices = { path = "../../crates/opendragon-devices" }
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
