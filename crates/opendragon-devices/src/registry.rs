@@ -3,7 +3,7 @@ use opendragon_hid::discovery::DiscoveredDevice;
 
 use crate::generic::GenericRedragonDevice;
 use crate::keyboards::RedragonKumaraProK552;
-use crate::mice::{RedragonM607, RedragonM909};
+use crate::mice::{RedragonM601, RedragonM607, RedragonM909};
 
 pub struct DeviceEntry {
     pub vendor_id: u16,
@@ -67,6 +67,11 @@ impl DeviceRegistry {
             }
             (RedragonM909::VENDOR_ID, RedragonM909::PRODUCT_ID) => {
                 let mut dev = RedragonM909::new(discovered.info);
+                let _ = dev.connect();
+                Box::new(dev)
+            }
+            (RedragonM601::VENDOR_ID, RedragonM601::PRODUCT_ID) => {
+                let mut dev = RedragonM601::new(discovered.info);
                 let _ = dev.connect();
                 Box::new(dev)
             }

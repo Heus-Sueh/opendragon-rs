@@ -43,3 +43,10 @@ OpenDragon adheres to an evidence-based support policy: a capability is marked a
 - **VID / PID**: `0x04D9` / `0xFC4C`
 - **MCU Architecture**: Holtek Semiconductor
 - **Config Interface**: Interface 2, Feature Report ID 2 (`0x02`), 16-byte packets.
+
+### Redragon M601-3 Centrophorus
+- **VID / PID**: `0x04D9` / `0xFC18`
+- **MCU Architecture**: Holtek Semiconductor
+- **Config Interface**: Interface 2, Feature Report ID 2 (`0x02`), 16-byte packets.
+- **Key Features**: Optical sensor DPI stages, 1000Hz polling rate, RGB lighting effects, on-board hardware profiles.
+

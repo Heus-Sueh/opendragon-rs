@@ -4,24 +4,24 @@
 # Installation:
 #   sudo cp udev/70-opendragon.rules /etc/udev/rules.d/
 #   sudo udevadm control --reload-rules && sudo udevadm trigger
-#   sudo usermod -a -G plugdev $USER
 
 # Microdia / Sonix (Kumara Pro K552RGB-PRO, Mitra K551, Kumara K552, EVision)
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0c45", TAG+="uaccess", GROUP="plugdev", MODE="0660"
-SUBSYSTEM=="usb", ATTRS{idVendor}=="0c45", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", ATTRS{idVendor}=="0c45", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0c45", MODE="0666", TAG+="uaccess"
 
 # Holtek Semiconductor (M607 Griffin, M909 Emperor, M601-3 Centrophorus)
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="04d9", TAG+="uaccess", GROUP="plugdev", MODE="0660"
-SUBSYSTEM=="usb", ATTRS{idVendor}=="04d9", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", ATTRS{idVendor}=="04d9", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="04d9", MODE="0666", TAG+="uaccess"
 
 # ACRUX (Redragon 2.4G Wireless Receivers and Dongles)
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1a34", TAG+="uaccess", GROUP="plugdev", MODE="0660"
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1a34", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", ATTRS{idVendor}=="1a34", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1a34", MODE="0666", TAG+="uaccess"
 
 # SinoWealth (Redragon Keyboards and Mice)
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="258a", TAG+="uaccess", GROUP="plugdev", MODE="0660"
-SUBSYSTEM=="usb", ATTRS{idVendor}=="258a", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", ATTRS{idVendor}=="258a", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="258a", MODE="0666", TAG+="uaccess"
 
 # Redragon Native / EVision
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="320f", TAG+="uaccess", GROUP="plugdev", MODE="0660"
-SUBSYSTEM=="usb", ATTRS{idVendor}=="320f", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", ATTRS{idVendor}=="320f", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="320f", MODE="0666", TAG+="uaccess"
+

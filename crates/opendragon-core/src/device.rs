@@ -96,6 +96,18 @@ pub trait Device: Send + Sync {
         Err(OpenDragonError::UnsupportedCapability(Capability::Lighting))
     }
 
+    /// Sets device brightness (0-100), preserving the current lighting mode and color if supported.
+    fn set_brightness(&mut self, brightness: u8) -> Result<(), OpenDragonError> {
+        let mut config = self.get_lighting().unwrap_or_default();
+        config.brightness = brightness.min(100);
+        self.set_lighting(&config)
+    }
+
+    /// Retrieves current device brightness level (0-100) if readable.
+    fn get_brightness(&self) -> Result<u8, OpenDragonError> {
+        self.get_lighting().map(|c| c.brightness)
+    }
+
     /// Sets active hardware profile.
     fn set_profile(&mut self, _profile: ProfileId) -> Result<(), OpenDragonError> {
         Err(OpenDragonError::UnsupportedCapability(Capability::Profile))
@@ -141,5 +153,15 @@ pub trait Device: Send + Sync {
         Err(OpenDragonError::UnsupportedCapability(
             Capability::RapidTrigger,
         ))
+    }
+
+    /// Sets optical/laser sensor DPI sensitivity.
+    fn set_dpi(&mut self, _dpi: u16) -> Result<(), OpenDragonError> {
+        Err(OpenDragonError::UnsupportedCapability(Capability::Dpi))
+    }
+
+    /// Retrieves current optical/laser sensor DPI sensitivity if readable.
+    fn get_dpi(&self) -> Result<u16, OpenDragonError> {
+        Err(OpenDragonError::UnsupportedCapability(Capability::Dpi))
     }
 }

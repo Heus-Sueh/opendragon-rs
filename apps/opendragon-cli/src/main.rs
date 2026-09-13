@@ -19,7 +19,7 @@ use opendragon_hid::probe::DeviceProber;
     name = "opendragon",
     version = "0.2.0",
     about = "Modern extensible configuration utility for Redragon peripherals",
-    long_about = "OpenDragon provides safe hardware discovery, non-destructive probing, reverse engineering tools, and configuration for Redragon keyboards, mice, and accessories."
+    long_about = "OpenDragon-rs provides safe hardware discovery, non-destructive probing, reverse engineering tools, and configuration for Redragon keyboards, mice, and accessories."
 )]
 struct Cli {
     #[arg(short, long, global = true, help = "Output response in JSON format")]
@@ -91,8 +91,40 @@ enum Commands {
         action: PollingRateCommands,
     },
 
+    #[command(about = "Manage and switch hardware profiles")]
+    Profile {
+        #[command(subcommand)]
+        action: ProfileCommands,
+    },
+
+    #[command(about = "Configure mouse sensor DPI sensitivity")]
+    Dpi {
+        #[command(subcommand)]
+        action: DpiCommands,
+    },
+
     #[command(about = "Check /dev/hidraw permissions and show udev setup instructions")]
     Permissions,
+}
+
+#[derive(Subcommand)]
+enum DpiCommands {
+    #[command(about = "Set sensor DPI sensitivity (e.g. 800, 1600, 3200)")]
+    Set {
+        #[arg(help = "DPI value (100 to 12400)")]
+        dpi: u16,
+    },
+    #[command(about = "Get current sensor DPI sensitivity")]
+    Get,
+}
+
+#[derive(Subcommand)]
+enum ProfileCommands {
+    #[command(about = "Switch active hardware profile (1 to 3)")]
+    Set {
+        #[arg(help = "Profile number (1 to 3)")]
+        profile: u8,
+    },
 }
 
 #[derive(Subcommand)]
@@ -101,6 +133,13 @@ enum RgbCommands {
     Static {
         #[arg(help = "Color in hex format (#RRGGBB)")]
         color: String,
+        #[arg(
+            short,
+            long,
+            default_value_t = 100,
+            help = "Brightness percentage (0 to 100)"
+        )]
+        brightness: u8,
     },
 
     #[command(about = "Set brightness (0-100)")]
@@ -223,7 +262,7 @@ fn main() -> ExitCode {
                     path.display()
                 );
                 eprintln!(
-                    "To configure permissions without root, install the OpenDragon udev rules:"
+                    "To configure permissions without root, install the OpenDragon-rs udev rules:"
                 );
                 eprintln!("  sudo cp udev/70-opendragon.rules /etc/udev/rules.d/");
                 eprintln!("  sudo udevadm control --reload-rules && sudo udevadm trigger");
@@ -385,30 +424,28 @@ fn run_cli(cli: Cli) -> Result<(), OpenDragonError> {
             let mut driver = DeviceRegistry::create_device(discovered);
 
             match action {
-                RgbCommands::Static { color } => {
+                RgbCommands::Static { color, brightness } => {
                     let rgb: RgbColor = color.parse()?;
                     let config = LightingConfig {
                         mode: LightingMode::Static,
                         color: rgb,
-                        brightness: 100,
+                        brightness: brightness.min(100),
                         speed: 0,
                         direction: None,
                     };
                     driver.set_lighting(&config)?;
                     println!(
-                        "Set static RGB color to {rgb} on {}",
+                        "Set static RGB color to {rgb} (brightness: {}%) on {}",
+                        config.brightness,
                         driver.info().product_name
                     );
                 }
                 RgbCommands::Brightness { level } => {
-                    let config = LightingConfig {
-                        brightness: level.min(100),
-                        ..Default::default()
-                    };
-                    driver.set_lighting(&config)?;
+                    let level = level.min(100);
+                    driver.set_brightness(level)?;
                     println!(
                         "Set brightness to {}% on {}",
-                        config.brightness,
+                        level,
                         driver.info().product_name
                     );
                 }
@@ -525,8 +562,37 @@ fn run_cli(cli: Cli) -> Result<(), OpenDragonError> {
             Ok(())
         }
 
+        Commands::Profile { action } => {
+            let target = find_target_device(&cli.vid, &cli.pid)?;
+            let mut driver = DeviceRegistry::create_device(target);
+            match action {
+                ProfileCommands::Set { profile } => {
+                    let pid = opendragon_core::profile::ProfileId::new(profile.saturating_sub(1));
+                    driver.set_profile(pid)?;
+                    println!("Switched to hardware profile {}", profile);
+                }
+            }
+            Ok(())
+        }
+
+        Commands::Dpi { action } => {
+            let target = find_target_device(&cli.vid, &cli.pid)?;
+            let mut driver = DeviceRegistry::create_device(target);
+            match action {
+                DpiCommands::Get => {
+                    let dpi = driver.get_dpi()?;
+                    println!("Current sensor DPI: {}", dpi);
+                }
+                DpiCommands::Set { dpi } => {
+                    driver.set_dpi(dpi)?;
+                    println!("Updated mouse sensor DPI to {}", dpi);
+                }
+            }
+            Ok(())
+        }
+
         Commands::Permissions => {
-            println!("OpenDragon Linux Permission & Udev Diagnostic");
+            println!("OpenDragon-rs Linux Permission & Udev Diagnostic");
             println!("{:-<60}", "");
 
             #[cfg(target_os = "linux")]
@@ -563,10 +629,9 @@ fn run_cli(cli: Cli) -> Result<(), OpenDragonError> {
                     accessible, total
                 );
                 if accessible < total {
-                    println!("\nTo grant unprivileged access to Redragon devices, install the udev rules:");
+                    println!("\nTo grant unprivileged access to Redragon devices, install the updated udev rules:");
                     println!("  sudo cp udev/70-opendragon.rules /etc/udev/rules.d/");
                     println!("  sudo udevadm control --reload-rules && sudo udevadm trigger");
-                    println!("  sudo usermod -a -G plugdev $USER  (if using group based access)");
                 } else {
                     println!("\nAll /dev/hidraw nodes are accessible by current user!");
                 }

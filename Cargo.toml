@@ -6,16 +6,17 @@ members = [
     "crates/opendragon-protocol",
     "crates/opendragon-devices",
     "apps/opendragon-cli",
+    "apps/opendragon-gui",
     "tools/hid-diff",
 ]
 
 [workspace.package]
 version = "0.2.0"
 edition = "2021"
-authors = ["OpenDragon Contributors"]
+authors = ["OpenDragon-rs Contributors"]
 license = "GPL-3.0-or-later"
-repository = "https://github.com/GrbavaCigla/opendragon"
-homepage = "https://github.com/GrbavaCigla/opendragon"
+repository = "https://github.com/GrbavaCigla/opendragon-rs"
+homepage = "https://github.com/GrbavaCigla/opendragon-rs"
 readme = "README.md"
 keywords = ["redragon", "hid", "keyboard", "mouse", "rgb"]
 categories = ["hardware-support", "command-line-utilities"]

@@ -1,0 +1,26 @@
+[package]
+name = "opendragon-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+mock-device = []
+
+[dependencies]
+gpui = { package = "gpui-pre", version = "0.3.4" }
+gpui-kit = "0.6.1"
+opendragon-core = { path = "../../crates/opendragon-core" }
+opendragon-devices = { path = "../../crates/opendragon-devices" }
+opendragon-hid = { path = "../../crates/opendragon-hid" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+gpui = { package = "gpui-pre", version = "0.3.4", features = ["test-support"] }

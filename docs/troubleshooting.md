@@ -15,7 +15,7 @@ Error: Permission denied accessing HID device at /dev/hidrawX. Run with appropri
 By default, standard Linux system configurations restrict `/dev/hidraw*` device nodes to the `root` user (`0600`).
 
 ### Solution:
-Install the OpenDragon udev rules to grant unprivileged access via systemd user ACLs and the `plugdev` group:
+Install the OpenDragon udev rules to grant unprivileged access via systemd `uaccess` and `0666` device node mode:
 
 ```bash
 # 1. Copy udev rule
@@ -23,9 +23,6 @@ sudo cp udev/70-opendragon.rules /etc/udev/rules.d/
 
 # 2. Reload udev rules and trigger device events
 sudo udevadm control --reload-rules && sudo udevadm trigger
-
-# 3. Ensure your user belongs to the plugdev group (if applicable)
-sudo usermod -a -G plugdev $USER
 ```
 
 Verify permissions using the built-in diagnostic tool:

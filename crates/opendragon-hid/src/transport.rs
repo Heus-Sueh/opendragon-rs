@@ -89,6 +89,9 @@ impl HidTransportHandle {
                 self.path
             ))
         })?;
+        // Drain response ACK if keyboard firmware responds (non-blocking / short timeout)
+        let mut ack_buf = [0u8; 64];
+        let _ = dev.read_timeout(&mut ack_buf, 40);
         Ok(())
     }
 

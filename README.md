@@ -1,10 +1,10 @@
-# OpenDragon
+# OpenDragon-rs
 
-[![CI](https://github.com/GrbavaCigla/opendragon/actions/workflows/ci.yml/badge.svg)](https://github.com/GrbavaCigla/opendragon/actions/workflows/ci.yml)
+[![CI](https://github.com/GrbavaCigla/opendragon-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/GrbavaCigla/opendragon-rs/actions/workflows/ci.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Rust: Stable](https://img.shields.io/badge/Rust-1.80%2B-orange.svg)](https://www.rust-lang.org/)
 
-**OpenDragon** is a modern, extensible, memory-safe configuration and reverse-engineering framework for **Redragon** peripherals on Linux (and other platforms).
+**OpenDragon-rs** is a modern, extensible, memory-safe configuration and reverse-engineering framework for **Redragon** peripherals on Linux (and other platforms).
 
 Originally started as an out-of-tree Linux kernel module, OpenDragon has been modernized and re-architected in **Rust** as a modular userspace framework built upon standard HID protocols, non-destructive device probing, and evidence-driven reverse engineering.
 
@@ -66,7 +66,6 @@ To configure hardware without requiring root privileges (`sudo`), install the ud
 ```bash
 sudo cp udev/70-opendragon.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
-sudo usermod -a -G plugdev $USER
 ```
 
 Verify permissions using the built-in diagnostic command:

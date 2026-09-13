@@ -53,7 +53,8 @@ Create `re/devices/<device-name>/`:
 
 Add the device VID/PID to `udev/70-opendragon.rules`:
 ```udev
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="XXXX", ATTRS{idProduct}=="YYYY", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", ATTRS{idVendor}=="XXXX", ATTRS{idProduct}=="YYYY", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="XXXX", ATTRS{idProduct}=="YYYY", MODE="0666", TAG+="uaccess"
 ```
 
 ---

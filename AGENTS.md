@@ -1,12 +1,12 @@
-# AGENTS.md - Agent Developer Guide for OpenDragon
+# AGENTS.md - Agent Developer Guide for OpenDragon-rs
 
-Welcome to **OpenDragon**. This document provides mandatory architectural instructions, coding standards, reverse engineering rules, and definition-of-done criteria for AI coding agents and human contributors working in this repository.
+Welcome to **OpenDragon-rs**. This document provides mandatory architectural instructions, coding standards, reverse engineering rules, and definition-of-done criteria for AI coding agents and human contributors working in this repository.
 
 ---
 
 ## 1. Project Mission
 
-OpenDragon is a modern, memory-safe, extensible Linux/cross-platform peripheral configuration suite for **Redragon** hardware. The initial primary hardware target is the **Redragon Kumara Pro K552RGB-PRO** keyboard.
+OpenDragon-rs is a modern, memory-safe, extensible Linux/cross-platform peripheral configuration suite for **Redragon** hardware. The initial primary hardware target is the **Redragon Kumara Pro K552RGB-PRO** keyboard.
 
 Our objective is **not** simply to accumulate unverified packet code, but to build an **empirical, reusable, and verifiable reverse-engineering knowledge base** alongside robust, type-safe Rust device drivers.
 
@@ -24,11 +24,12 @@ opendragon/
 │   ├── opendragon-protocol/        # Pure packet builders, parsers, checksums, command safety policies
 │   └── opendragon-devices/         # Concrete device drivers (K552RGB-PRO, M607, M909) and registry
 ├── apps/
-│   └── opendragon-cli/             # User CLI application (opendragon list, info, probe, rgb, etc.)
+│   ├── opendragon-cli/             # User CLI application (opendragon list, info, probe, rgb, etc.)
+│   └── opendragon-gui/             # Native GPUI-CE desktop GUI application
 ├── tools/
 │   └── hid-diff/                   # Differential packet analysis utility for reverse engineering
 ├── udev/
-│   └── 70-opendragon.rules         # Modern udev rules (uaccess + plugdev permissions)
+│   └── 70-opendragon.rules         # Modern udev rules (uaccess + 0666 permissions)
 ├── docs/                           # Documentation and guides
 ├── re/                             # Empirical reverse-engineering knowledge base
 │   ├── devices/                    # Per-device metadata, specifications, and investigations
@@ -106,3 +107,16 @@ A task or feature is considered complete only when:
 3. For hardware features marked as `Supported`, observable behavior was verified on physical hardware.
 4. Protocol discoveries are documented in `re/devices/<device>/` and cross-referenced in `docs/`.
 5. Udev rules, CLI options, and tests are updated.
+
+---
+
+## 8. Desktop GUI Development (GPUI-CE)
+
+- **Crate**: `apps/opendragon-gui/`
+- **Skill**: Consult `.agents/skills/gpui-ui/SKILL.md`.
+- **Decoupling**: The GUI must interact strictly through the `DeviceBackend` trait using typed domain models from `opendragon-core`. Never format or decode raw HID packets inside the GUI.
+- **Mock Mode**: Always test GUI changes in headless/mock mode to verify rendering without requiring physical hardware:
+  ```bash
+  cargo run -p opendragon-gui --features mock-device
+  ```
+- **Aesthetic Standard**: Follow `docs/ui/design-system.md`. Maintain clean, modern desktop aesthetics (no tacky gamer neon).

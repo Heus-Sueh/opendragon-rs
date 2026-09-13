@@ -5,6 +5,7 @@ use opendragon_core::capability::{Capability, SupportStatus};
 use opendragon_core::device::{Device, DeviceInfo};
 use opendragon_core::error::OpenDragonError;
 use opendragon_core::lighting::LightingConfig;
+use opendragon_core::polling_rate::PollingRate;
 use opendragon_core::profile::ProfileId;
 use opendragon_hid::transport::HidTransportHandle;
 use opendragon_protocol::legacy_mouse::LegacyMousePacketBuilder;
@@ -19,6 +20,8 @@ pub const M909_CAPABILITIES: &[Capability] = &[
 pub struct RedragonM909 {
     info: DeviceInfo,
     transport: Option<HidTransportHandle>,
+    current_dpi: u16,
+    current_polling_rate: PollingRate,
 }
 
 impl RedragonM909 {
@@ -29,6 +32,8 @@ impl RedragonM909 {
         Self {
             info,
             transport: None,
+            current_dpi: 1600,
+            current_polling_rate: PollingRate::Hz1000,
         }
     }
 
@@ -73,8 +78,8 @@ impl Device for RedragonM909 {
         match capability {
             Capability::Lighting => SupportStatus::Supported,
             Capability::Profile => SupportStatus::Supported,
-            Capability::Dpi => SupportStatus::Wip,
-            Capability::PollingRate => SupportStatus::Partial,
+            Capability::Dpi => SupportStatus::Supported,
+            Capability::PollingRate => SupportStatus::Supported,
             _ => SupportStatus::Unsupported,
         }
     }
@@ -113,5 +118,51 @@ impl Device for RedragonM909 {
         }
         info!("Updated Redragon M909 active profile to {}", profile);
         Ok(())
+    }
+
+    fn set_dpi(&mut self, dpi: u16) -> Result<(), OpenDragonError> {
+        if self.transport.is_none() {
+            self.connect()?;
+        }
+
+        let packets = LegacyMousePacketBuilder::build_dpi_packets(dpi);
+        let transport = self
+            .transport
+            .as_ref()
+            .ok_or_else(|| OpenDragonError::HidTransport("No transport handle available".into()))?;
+
+        for packet in packets {
+            transport.send_feature_report(&packet)?;
+        }
+        self.current_dpi = dpi;
+        info!("Updated Redragon M909 sensor DPI to {}", dpi);
+        Ok(())
+    }
+
+    fn get_dpi(&self) -> Result<u16, OpenDragonError> {
+        Ok(self.current_dpi)
+    }
+
+    fn set_polling_rate(&mut self, rate: PollingRate) -> Result<(), OpenDragonError> {
+        if self.transport.is_none() {
+            self.connect()?;
+        }
+
+        let packets = LegacyMousePacketBuilder::build_polling_rate_packets(rate)?;
+        let transport = self
+            .transport
+            .as_ref()
+            .ok_or_else(|| OpenDragonError::HidTransport("No transport handle available".into()))?;
+
+        for packet in packets {
+            transport.send_feature_report(&packet)?;
+        }
+        self.current_polling_rate = rate;
+        info!("Updated Redragon M909 polling rate to {}", rate);
+        Ok(())
+    }
+
+    fn get_polling_rate(&self) -> Result<PollingRate, OpenDragonError> {
+        Ok(self.current_polling_rate)
     }
 }

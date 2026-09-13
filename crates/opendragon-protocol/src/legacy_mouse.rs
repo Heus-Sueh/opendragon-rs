@@ -208,13 +208,119 @@ impl LegacyMousePacketBuilder {
         vec![p_select, p_commit1, p_commit2, p_commit3, p_commit4]
     }
 
+    /// Builds DPI configuration packet sequence for legacy Holtek mice (M607, M909, M601-3).
+    /// Maps DPI to the hardware 50-step units (e.g. 1000 DPI -> 20 units).
+    pub fn build_dpi_packets(dpi: u16) -> Vec<[u8; Self::PACKET_LEN]> {
+        let units = (dpi / 50).max(1);
+        let units_le = units.to_le_bytes();
+
+        let p_dpi = [
+            Self::REPORT_ID,
+            0xf3,
+            0x44, // Primary DPI stage
+            0x00,
+            0x05, // 5 bytes payload
+            0x00,
+            0x00,
+            0x00,
+            0x01, // active flag
+            units_le[0],
+            units_le[1],
+            units_le[0],
+            units_le[1],
+            0x00,
+            0x00,
+            0x00,
+        ];
+
+        let p_commit = [
+            Self::REPORT_ID,
+            0xf1,
+            0x02,
+            0x10,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+        ];
+
+        vec![p_dpi, p_commit]
+    }
+
+    /// Builds USB polling rate configuration packet sequence for legacy Holtek mice.
+    pub fn build_polling_rate_packets(
+        rate: opendragon_core::polling_rate::PollingRate,
+    ) -> Result<Vec<[u8; Self::PACKET_LEN]>, OpenDragonError> {
+        use opendragon_core::polling_rate::PollingRate;
+
+        let code: u8 = match rate {
+            PollingRate::Hz125 => 0x08,
+            PollingRate::Hz250 => 0x04,
+            PollingRate::Hz500 => 0x02,
+            PollingRate::Hz1000 => 0x01,
+            _ => {
+                return Err(OpenDragonError::Protocol(format!(
+                    "Unsupported polling rate {rate} for legacy mouse"
+                )))
+            }
+        };
+
+        let p_rate = [
+            Self::REPORT_ID,
+            0xf3,
+            0x38,
+            0x00,
+            0x04,
+            0x00,
+            0x00,
+            0x00,
+            code,
+            0x00,
+            code,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+        ];
+
+        let p_commit = [
+            Self::REPORT_ID,
+            0xf1,
+            0x02,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+        ];
+
+        Ok(vec![p_rate, p_commit])
+    }
+
     fn resolve_light_modes(
         product_id: u16,
         mode: LightingMode,
     ) -> Result<(u8, u8), OpenDragonError> {
         match product_id {
-            0xfc38 => {
-                // Redragon M607 Griffin
+            0xfc38 | 0xfc18 => {
+                // Redragon M607 Griffin / M601-3 Centrophorus
                 let (lmode, umode) = match mode {
                     LightingMode::Breathing => (0x01, 0x04),
                     LightingMode::Rainbow => (0x01, 0x08),
@@ -289,5 +395,43 @@ mod tests {
         assert_eq!(packets.len(), 5);
         assert_eq!(packets[0][8], 0x02); // Profile index 2
         assert_eq!(packets[1][1], 0xf1); // Commit packet 1
+    }
+
+    #[test]
+    fn test_legacy_mouse_dpi_packets() {
+        let packets = LegacyMousePacketBuilder::build_dpi_packets(1000);
+        assert_eq!(packets.len(), 2);
+        // 1000 / 50 = 20 (0x14)
+        assert_eq!(packets[0][0], 0x02);
+        assert_eq!(packets[0][1], 0xf3);
+        assert_eq!(packets[0][2], 0x44);
+        assert_eq!(packets[0][8], 0x01); // active
+        assert_eq!(packets[0][9], 20); // 1000 DPI / 50
+        assert_eq!(packets[1][1], 0xf1); // commit
+    }
+
+    #[test]
+    fn test_legacy_mouse_polling_rate_packets() {
+        use opendragon_core::polling_rate::PollingRate;
+        let packets =
+            LegacyMousePacketBuilder::build_polling_rate_packets(PollingRate::Hz1000).unwrap();
+        assert_eq!(packets.len(), 2);
+        assert_eq!(packets[0][2], 0x38);
+        assert_eq!(packets[0][8], 0x01); // 1000Hz code
+    }
+
+    #[test]
+    fn test_m601_lighting_packets() {
+        let config = LightingConfig {
+            mode: LightingMode::Breathing,
+            color: RgbColor::new(0x00, 0xff, 0x00),
+            brightness: 100,
+            speed: 50,
+            direction: None,
+        };
+        let packets = LegacyMousePacketBuilder::build_lighting_packets(0xfc18, &config).unwrap();
+        assert_eq!(packets.len(), 4);
+        assert_eq!(packets[1][11], 0x01); // lmode
+        assert_eq!(packets[1][13], 0x04); // umode
     }
 }
