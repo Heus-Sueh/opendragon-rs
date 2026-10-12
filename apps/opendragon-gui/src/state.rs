@@ -10,6 +10,7 @@ use opendragon_core::profile::ProfileId;
 use opendragon_core::rapid_trigger::RapidTriggerConfig;
 
 use crate::services::devices::{DeviceBackend, DeviceSummary, MacroItem, ProfileSummary};
+pub use crate::services::preferences::KeyboardLayout;
 use crate::services::preferences::Preferences;
 use crate::theme::{Theme, ThemeMode};
 
@@ -25,6 +26,34 @@ pub enum Page {
     Settings,
     Diagnostics,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeviceAction {
+    Navigate(Page),
+    SelectDevice(String),
+    RefreshDevices,
+    ExportDeviceDiagnostics(String),
+    UpdateLighting(LightingConfig),
+    SetBrightness(u8),
+    UpdateActuation(ActuationPoint),
+    UpdateRapidTrigger(RapidTriggerConfig),
+    ToggleRapidTrigger(bool),
+    UpdatePollingRate(PollingRate),
+    SwitchProfile(ProfileId),
+    AddProfile(String),
+    DeleteProfile(ProfileId),
+    ToggleKeySelection(u8),
+    SelectKey(u8),
+    ClearKeySelection,
+    UpdateDpi(u16),
+    CopyTechnicalInfo(String),
+    ExportProbeReport,
+    SetAutoConnect(bool),
+    SetThemeMode(ThemeMode),
+    SetKeyboardLayout(KeyboardLayout),
+}
+
+pub type ActionDispatcher = Arc<dyn Fn(DeviceAction, &mut gpui::Window, &mut gpui::App) + 'static>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToastType {
@@ -127,15 +156,13 @@ impl AppState {
         match res {
             Ok(devs) => {
                 self.devices = devs;
-                if let Some(selected_id) = &self.selected_device_id {
-                    if !self.devices.iter().any(|d| &d.id == selected_id) {
-                        if let Some(active) = &mut self.active_device {
-                            active.summary.is_connected = false;
-                        }
+                if let Some(selected_id) = self.selected_device_id.clone() {
+                    if self.devices.iter().any(|d| d.id == selected_id) {
+                        self.select_device(&selected_id);
+                    } else if let Some(active) = &mut self.active_device {
+                        active.summary.is_connected = false;
                     }
-                }
-
-                if self.selected_device_id.is_none() {
+                } else {
                     let to_select = self
                         .preferences
                         .last_selected_device
@@ -387,6 +414,71 @@ impl AppState {
         }
         self.set_toast(format!("DPI updated to {dpi}"), ToastType::Success);
     }
+
+    pub fn dispatch(&mut self, action: DeviceAction) {
+        match action {
+            DeviceAction::Navigate(page) => self.navigate_to(page),
+            DeviceAction::SelectDevice(id) => self.select_device(&id),
+            DeviceAction::RefreshDevices => self.refresh_devices(),
+            DeviceAction::ExportDeviceDiagnostics(dev_id) => {
+                let report = {
+                    let b = self.backend.lock().unwrap();
+                    b.get_probe_report(&dev_id).unwrap_or_default()
+                };
+                self.set_toast(
+                    format!("Exported diagnostic report for device {dev_id}"),
+                    ToastType::Info,
+                );
+                tracing::info!("Device diagnostic export:\n{report}");
+            }
+            DeviceAction::UpdateLighting(cfg) => self.update_lighting(cfg),
+            DeviceAction::SetBrightness(brightness) => {
+                if let Some(act) = &self.active_device {
+                    let mut cfg = act.lighting.clone();
+                    cfg.brightness = brightness;
+                    self.update_lighting(cfg);
+                }
+            }
+            DeviceAction::UpdateActuation(point) => self.update_actuation(point),
+            DeviceAction::UpdateRapidTrigger(config) => self.update_rapid_trigger(config),
+            DeviceAction::ToggleRapidTrigger(enabled) => {
+                if let Some(act) = &self.active_device {
+                    let mut cfg = act.rapid_trigger;
+                    cfg.enabled = enabled;
+                    self.update_rapid_trigger(cfg);
+                }
+            }
+            DeviceAction::UpdatePollingRate(rate) => self.update_polling_rate(rate),
+            DeviceAction::SwitchProfile(id) => self.switch_profile(id),
+            DeviceAction::AddProfile(name) => self.add_profile(name),
+            DeviceAction::DeleteProfile(id) => self.delete_profile(id),
+            DeviceAction::ToggleKeySelection(key_id) => self.toggle_key_selection(key_id),
+            DeviceAction::SelectKey(key_id) => self.select_key(key_id),
+            DeviceAction::ClearKeySelection => self.clear_key_selection(),
+            DeviceAction::UpdateDpi(dpi) => self.update_dpi(dpi),
+            DeviceAction::CopyTechnicalInfo(info) => {
+                self.set_toast("Technical details copied to log", ToastType::Info);
+                tracing::info!("Technical diagnostic details:\n{info}");
+            }
+            DeviceAction::ExportProbeReport => {
+                if let Some(act) = &self.active_device {
+                    let report = {
+                        let b = self.backend.lock().unwrap();
+                        b.get_probe_report(&act.summary.id).unwrap_or_default()
+                    };
+                    self.set_toast("Exported probe report to stdout", ToastType::Success);
+                    println!("{report}");
+                }
+            }
+            DeviceAction::SetAutoConnect(enabled) => self.set_auto_connect(enabled),
+            DeviceAction::SetThemeMode(mode) => self.set_theme_mode(mode),
+            DeviceAction::SetKeyboardLayout(layout) => {
+                self.preferences.keyboard_layout = layout;
+                self.preferences.save();
+                self.set_toast(format!("Layout: {}", layout.label()), ToastType::Info);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -426,5 +518,89 @@ mod tests {
 
         state.clear_toast();
         assert!(state.toast.is_none());
+    }
+
+    #[test]
+    fn test_dispatch_intent_dispatcher() {
+        let backend = Arc::new(Mutex::new(MockDeviceBackend::new()));
+        let mut state = AppState::new(backend);
+
+        // Test navigation via dispatch
+        state.dispatch(DeviceAction::Navigate(Page::Settings));
+        assert_eq!(state.current_page, Page::Settings);
+
+        // Test device selection via dispatch
+        state.dispatch(DeviceAction::SelectDevice("mock-k552rgb-pro".to_string()));
+        assert_eq!(state.current_page, Page::Overview);
+        assert!(state.active_device.is_some());
+
+        // Test lighting update via dispatch
+        let new_cfg = LightingConfig {
+            mode: LightingMode::Breathing,
+            color: RgbColor::new(100, 200, 50),
+            brightness: 50,
+            speed: 2,
+            direction: None,
+        };
+        state.dispatch(DeviceAction::UpdateLighting(new_cfg.clone()));
+        assert_eq!(
+            state.active_device.as_ref().unwrap().lighting.mode,
+            LightingMode::Breathing
+        );
+        assert_eq!(
+            state.active_device.as_ref().unwrap().lighting.brightness,
+            50
+        );
+
+        // Test brightness adjustment via dispatch
+        state.dispatch(DeviceAction::SetBrightness(85));
+        assert_eq!(
+            state.active_device.as_ref().unwrap().lighting.brightness,
+            85
+        );
+
+        // Test actuation adjustment via dispatch
+        let pt = ActuationPoint::new(1.8).unwrap();
+        state.dispatch(DeviceAction::UpdateActuation(pt));
+        assert_eq!(state.active_device.as_ref().unwrap().actuation.mm(), 1.8);
+
+        // Test rapid trigger toggle via dispatch
+        state.dispatch(DeviceAction::ToggleRapidTrigger(false));
+        assert!(!state.active_device.as_ref().unwrap().rapid_trigger.enabled);
+        state.dispatch(DeviceAction::ToggleRapidTrigger(true));
+        assert!(state.active_device.as_ref().unwrap().rapid_trigger.enabled);
+
+        // Test polling rate via dispatch
+        state.dispatch(DeviceAction::UpdatePollingRate(PollingRate::Hz500));
+        assert_eq!(
+            state.active_device.as_ref().unwrap().polling_rate,
+            PollingRate::Hz500
+        );
+
+        // Test key selection via dispatch
+        state.dispatch(DeviceAction::SelectKey(42));
+        assert!(state
+            .active_device
+            .as_ref()
+            .unwrap()
+            .visual_state
+            .selected_keys
+            .contains(&42));
+        state.dispatch(DeviceAction::ToggleKeySelection(42));
+        assert!(!state
+            .active_device
+            .as_ref()
+            .unwrap()
+            .visual_state
+            .selected_keys
+            .contains(&42));
+
+        // Test profiles via dispatch
+        state.dispatch(DeviceAction::AddProfile("Gaming FPS".to_string()));
+        let profs = &state.active_device.as_ref().unwrap().profiles;
+        assert!(profs.iter().any(|p| p.name == "Gaming FPS"));
+
+        // Test toast produced by dispatch
+        assert!(state.toast.is_some());
     }
 }

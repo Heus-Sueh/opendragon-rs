@@ -2,7 +2,7 @@ use gpui::prelude::*;
 use gpui::*;
 
 use crate::components::{Button, Card};
-use crate::state::AppState;
+use crate::state::{AppState, DeviceAction};
 use crate::theme::{
     FONT_SIZE_CAPTION, FONT_SIZE_HEADING, FONT_SIZE_SM, FONT_SIZE_TITLE, RADIUS_SM, SPACE_1,
     SPACE_2, SPACE_3, SPACE_6,
@@ -13,9 +13,17 @@ pub struct DiagnosticsView;
 impl DiagnosticsView {
     pub fn render(
         state: &AppState,
-        on_copy_info: impl Fn(String, &mut Window, &mut App) + 'static + Clone,
-        on_export_report: impl Fn(&mut Window, &mut App) + 'static + Clone,
+        on_action: impl Fn(DeviceAction, &mut Window, &mut App) + 'static + Clone,
     ) -> Div {
+        let on_act_info = on_action.clone();
+        let on_copy_info = move |info: String, w: &mut Window, a: &mut App| {
+            on_act_info(DeviceAction::CopyTechnicalInfo(info), w, a);
+        };
+
+        let on_act_exp = on_action.clone();
+        let on_export_report = move |w: &mut Window, a: &mut App| {
+            on_act_exp(DeviceAction::ExportProbeReport, w, a);
+        };
         let theme = &state.theme;
         let active = match &state.active_device {
             Some(dev) => dev,

@@ -5,12 +5,32 @@ use serde::{Deserialize, Serialize};
 
 use crate::theme::ThemeMode;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum KeyboardLayout {
+    #[default]
+    Ansi,
+    Abnt2,
+    Iso,
+}
+
+impl KeyboardLayout {
+    pub fn label(&self) -> &'static str {
+        match self {
+            KeyboardLayout::Ansi => "ANSI (US)",
+            KeyboardLayout::Abnt2 => "ABNT2 (BR)",
+            KeyboardLayout::Iso => "ISO (EU)",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Preferences {
     pub theme_mode: ThemeMode,
     pub last_selected_device: Option<String>,
     pub start_minimized: bool,
     pub auto_connect: bool,
+    #[serde(default)]
+    pub keyboard_layout: KeyboardLayout,
 }
 
 impl Default for Preferences {
@@ -20,6 +40,7 @@ impl Default for Preferences {
             last_selected_device: None,
             start_minimized: false,
             auto_connect: true,
+            keyboard_layout: KeyboardLayout::Ansi,
         }
     }
 }

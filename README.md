@@ -10,6 +10,10 @@ Originally started as an out-of-tree Linux kernel module, OpenDragon has been mo
 
 The initial flagship hardware focus is the **Redragon Kumara Pro K552RGB-PRO** keyboard.
 
+<p align="center">
+  <img src="docs/images/gui-screenshot.png" alt="OpenDragon Desktop GUI" width="850" />
+</p>
+
 ---
 
 ## Features
@@ -175,6 +179,14 @@ Contributions are welcome!
    cargo test --workspace
    ```
 3. Submit a pull request with clear evidence and documentation.
+
+---
+
+## Acknowledgements & Credits
+
+OpenDragon was originally conceived, pioneered, and authored by [GrbavaCigla](https://github.com/GrbavaCigla) in the [GrbavaCigla/opendragon](https://github.com/GrbavaCigla/opendragon) repository as a Linux kernel driver for Redragon mechanical keyboards. 
+
+We express our deepest gratitude for their foundational reverse-engineering research, protocol packet captures, and open-source contributions that established the groundwork for this modernized userspace Rust continuation.
 
 ---
 

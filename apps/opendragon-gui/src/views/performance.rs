@@ -5,11 +5,14 @@ use opendragon_core::actuation::ActuationPoint;
 use opendragon_core::polling_rate::PollingRate;
 use opendragon_core::rapid_trigger::RapidTriggerConfig;
 
-use crate::components::{BadgeStatus, Card, InfoTooltip, Slider, StatusBadge, Switch};
-use crate::state::AppState;
+use crate::components::{
+    BadgeStatus, Card, InfoTooltip, KeyboardPreview, MousePreview, SegmentedControl, Slider,
+    StatusBadge, Switch,
+};
+use crate::state::{AppState, DeviceAction};
 use crate::theme::{
-    CONTROL_HEIGHT_MD, FONT_SIZE_CAPTION, FONT_SIZE_HEADING, FONT_SIZE_SM, FONT_SIZE_TITLE,
-    RADIUS_SM, SPACE_1, SPACE_2, SPACE_3, SPACE_6,
+    FONT_SIZE_CAPTION, FONT_SIZE_HEADING, FONT_SIZE_SM, FONT_SIZE_TITLE, RADIUS_MD, RADIUS_SM,
+    SPACE_1, SPACE_2, SPACE_3, SPACE_6,
 };
 
 pub struct PerformanceView;
@@ -17,10 +20,22 @@ pub struct PerformanceView;
 impl PerformanceView {
     pub fn render(
         state: &AppState,
-        on_update_actuation: impl Fn(ActuationPoint, &mut Window, &mut App) + 'static + Clone,
-        on_update_rapid_trigger: impl Fn(RapidTriggerConfig, &mut Window, &mut App) + 'static + Clone,
-        on_update_polling_rate: impl Fn(PollingRate, &mut Window, &mut App) + 'static + Clone,
+        on_action: impl Fn(DeviceAction, &mut Window, &mut App) + 'static + Clone,
     ) -> Div {
+        let on_act_actuation = on_action.clone();
+        let on_update_actuation = move |pt: ActuationPoint, w: &mut Window, a: &mut App| {
+            on_act_actuation(DeviceAction::UpdateActuation(pt), w, a);
+        };
+
+        let on_act_rt = on_action.clone();
+        let on_update_rapid_trigger = move |rt: RapidTriggerConfig, w: &mut Window, a: &mut App| {
+            on_act_rt(DeviceAction::UpdateRapidTrigger(rt), w, a);
+        };
+
+        let on_act_pr = on_action.clone();
+        let on_update_polling_rate = move |pr: PollingRate, w: &mut Window, a: &mut App| {
+            on_act_pr(DeviceAction::UpdatePollingRate(pr), w, a);
+        };
         let theme = &state.theme;
         let active = match &state.active_device {
             Some(dev) => dev,
@@ -58,6 +73,118 @@ impl PerformanceView {
                     .label("Magnetic Switches")
                     .render(theme),
             );
+
+        let is_mouse = active
+            .summary
+            .capabilities
+            .contains(&opendragon_core::capability::Capability::Dpi)
+            && !active
+                .summary
+                .capabilities
+                .contains(&opendragon_core::capability::Capability::Actuation);
+
+        let hardware_canvas = if is_mouse {
+            let on_act_btn = on_action.clone();
+            let mouse_click_handler =
+                std::sync::Arc::new(move |btn_id: u8, w: &mut Window, a: &mut App| {
+                    on_act_btn(DeviceAction::ToggleKeySelection(btn_id), w, a);
+                });
+            MousePreview::render(
+                &active.visual_state,
+                active.dpi,
+                theme,
+                Some(mouse_click_handler),
+            )
+        } else {
+            let on_act_kc = on_action.clone();
+            let key_click_handler =
+                std::sync::Arc::new(move |key_id: u8, w: &mut Window, a: &mut App| {
+                    on_act_kc(DeviceAction::ToggleKeySelection(key_id), w, a);
+                });
+
+            let on_act_layout = on_action.clone();
+            let layout_change_handler =
+                std::sync::Arc::new(move |layout, w: &mut Window, a: &mut App| {
+                    on_act_layout(DeviceAction::SetKeyboardLayout(layout), w, a);
+                });
+
+            KeyboardPreview::render(
+                &active.visual_state,
+                theme,
+                state.preferences.keyboard_layout,
+                Some(key_click_handler),
+                Some(layout_change_handler),
+            )
+        };
+
+        // Magnetic Switch Travel Depth Visual Scale Gauge
+        let travel_percent = (active.actuation.mm() / 4.0).clamp(0.0, 1.0);
+        let travel_gauge = if !is_mouse {
+            Some(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(SPACE_2)
+                    .w_full()
+                    .p(SPACE_3)
+                    .rounded(RADIUS_SM)
+                    .bg(theme.surface)
+                    .border_1()
+                    .border_color(theme.border_subtle)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .justify_between()
+                            .text_color(theme.foreground_muted)
+                            .text_size(FONT_SIZE_CAPTION)
+                            .child("0.0 mm (Rest)")
+                            .child(
+                                div()
+                                    .text_color(theme.accent)
+                                    .font_weight(FontWeight::BOLD)
+                                    .child(format!(
+                                        "Calibrated Trigger: {:.1} mm",
+                                        active.actuation.mm()
+                                    )),
+                            )
+                            .child("4.0 mm (Bottom-out)"),
+                    )
+                    .child(
+                        div()
+                            .w_full()
+                            .h(px(8.0))
+                            .rounded_full()
+                            .bg(theme.surface_hover)
+                            .child(
+                                div()
+                                    .w(px(travel_percent * 640.0))
+                                    .h_full()
+                                    .rounded_full()
+                                    .bg(theme.accent),
+                            ),
+                    ),
+            )
+        } else {
+            None
+        };
+
+        let mut canvas_stage = div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap(SPACE_3)
+            .w_full()
+            .p(SPACE_3)
+            .rounded(RADIUS_MD)
+            .bg(theme.surface_elevated)
+            .border_1()
+            .border_color(theme.border_subtle)
+            .child(hardware_canvas);
+
+        if let Some(gauge) = travel_gauge {
+            canvas_stage = canvas_stage.child(gauge);
+        }
 
         // Actuation Point Control (0.1 mm to 4.0 mm, with precise stepper [-] [+] )
         let on_act = on_update_actuation.clone();
@@ -103,6 +230,7 @@ impl PerformanceView {
                 0.1,
                 2.0,
             )
+            .flat(true)
             .step(0.1)
             .unit("mm")
             .presets([
@@ -128,6 +256,7 @@ impl PerformanceView {
                 0.1,
                 2.0,
             )
+            .flat(true)
             .step(0.1)
             .unit("mm")
             .presets([
@@ -159,50 +288,20 @@ impl PerformanceView {
         };
 
         // Polling Rate (Supported hardware rates only: 125, 250, 500, 1000)
-        let rates = [
-            (PollingRate::Hz125, "125 Hz"),
-            (PollingRate::Hz250, "250 Hz"),
-            (PollingRate::Hz500, "500 Hz"),
-            (PollingRate::Hz1000, "1000 Hz"),
-        ];
-
-        let mut rate_buttons = div().flex().flex_row().gap(SPACE_2);
-
-        for (rate, label) in rates {
-            let is_active = active.polling_rate == rate;
-            let on_pr = on_update_polling_rate.clone();
-
-            let btn = div()
-                .flex_1()
-                .h(CONTROL_HEIGHT_MD)
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(RADIUS_SM)
-                .bg(if is_active {
-                    theme.accent
-                } else {
-                    theme.surface_hover
-                })
-                .text_color(if is_active {
-                    hsla(0.0, 0.0, 1.0, 1.0)
-                } else {
-                    theme.foreground
-                })
-                .text_size(FONT_SIZE_SM)
-                .font_weight(if is_active {
-                    FontWeight::SEMIBOLD
-                } else {
-                    FontWeight::NORMAL
-                })
-                .cursor_pointer()
-                .on_mouse_down(MouseButton::Left, move |_e, w, a| {
-                    on_pr(rate, w, a);
-                })
-                .child(label);
-
-            rate_buttons = rate_buttons.child(btn);
-        }
+        let on_pr = on_update_polling_rate.clone();
+        let rate_control = SegmentedControl::new(
+            [
+                (PollingRate::Hz125, "125 Hz"),
+                (PollingRate::Hz250, "250 Hz"),
+                (PollingRate::Hz500, "500 Hz"),
+                (PollingRate::Hz1000, "1000 Hz"),
+            ],
+            active.polling_rate,
+        )
+        .on_select(move |rate, w, a| {
+            on_pr(rate, w, a);
+        })
+        .render(theme);
 
         let polling_card = Card::new()
             .child(
@@ -225,7 +324,7 @@ impl PerformanceView {
                             )
                             .child(InfoTooltip::new("HID Endpoint Interval").render(theme)),
                     )
-                    .child(rate_buttons),
+                    .child(rate_control),
             )
             .render(theme);
 
@@ -274,13 +373,13 @@ impl PerformanceView {
                                             .text_color(theme.accent)
                                             .text_size(FONT_SIZE_SM)
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .child("🎯 0.1 mm - 1.2 mm (Esports / Ultra-Fast)"),
+                                            .child("0.1 mm – 1.2 mm (Ultra-fast trigger)"),
                                     )
                                     .child(
                                         div()
                                             .text_color(theme.foreground_muted)
                                             .text_size(FONT_SIZE_CAPTION)
-                                            .child("Instantaneous actuation. Ideal for lightning reaction times in competitive tactical shooters (CS2, Valorant, Apex Legends) and rhythm games."),
+                                            .child("Instantaneous actuation. Ideal for lightning reaction times in competitive tactical shooters and rhythm games."),
                                     ),
                             )
                             .child(
@@ -294,13 +393,13 @@ impl PerformanceView {
                                             .text_color(theme.foreground)
                                             .text_size(FONT_SIZE_SM)
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .child("✍️ 2.0 mm - 4.0 mm (Typing / Development)"),
+                                            .child("2.0 mm – 4.0 mm (Balanced / Development)"),
                                     )
                                     .child(
                                         div()
                                             .text_color(theme.foreground_muted)
                                             .text_size(FONT_SIZE_CAPTION)
-                                            .child("Deeper and more deliberate keystroke depth. Prevents accidental actuation of adjacent keys during long programming sessions and writing."),
+                                            .child("Deeper keystroke travel. Prevents accidental actuation during typing and programming sessions."),
                                     ),
                             ),
                     ),
@@ -348,7 +447,7 @@ impl PerformanceView {
                                     .text_color(theme.accent)
                                     .text_size(FONT_SIZE_SM)
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("⚡ Competitive Advantage in Counter-Strafing:"),
+                                    .child("Counter-strafing precision:"),
                             )
                             .child(
                                 div()
@@ -432,6 +531,7 @@ impl PerformanceView {
             .w_full()
             .max_w(crate::theme::CONTENT_MAX_WIDTH)
             .child(header)
+            .child(canvas_stage)
             .child(actuation_slider)
             .child(actuation_explainer)
             .child(rt_switch);

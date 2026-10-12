@@ -1,7 +1,8 @@
 use gpui::prelude::*;
 use gpui::*;
+use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 
-use crate::theme::{Theme, RADIUS_MD, SPACE_4};
+use crate::theme::Theme;
 
 pub type CardClickHandler = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>;
 
@@ -47,31 +48,21 @@ impl Card {
 
     pub fn render(self, theme: &Theme) -> Div {
         let hover_bg = theme.surface_hover;
-        let mut el = div()
-            .flex()
-            .flex_col()
-            .p(SPACE_4)
-            .rounded(RADIUS_MD)
-            .bg(theme.surface)
-            .border_1()
-            .border_color(theme.border);
+        let box_el = GroupBox::new().outline().children(self.content);
 
         if self.is_interactive {
-            el = el.cursor_pointer().hover(move |mut s| {
+            let mut wrapper = div().w_full().cursor_pointer().hover(move |mut s| {
                 s.background = Some(hover_bg.into());
                 s
             });
             if let Some(handler) = self.on_click {
-                el = el.on_mouse_down(MouseButton::Left, move |event, window, cx| {
+                wrapper = wrapper.on_mouse_down(MouseButton::Left, move |event, window, cx| {
                     handler(event, window, cx);
                 });
             }
+            wrapper.child(box_el)
+        } else {
+            div().w_full().child(box_el)
         }
-
-        for child in self.content {
-            el = el.child(child);
-        }
-
-        el
     }
 }

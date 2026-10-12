@@ -1,240 +1,245 @@
 use gpui::prelude::*;
 use gpui::*;
-
-use crate::state::{AppState, Page};
-use crate::theme::{
-    CONTROL_HEIGHT_MD, FONT_SIZE_BODY, FONT_SIZE_CAPTION, RADIUS_SM, SIDEBAR_WIDTH, SPACE_2,
-    SPACE_4,
+use gpui_kit::assets::IconName;
+use gpui_kit::component::sidebar::{
+    Sidebar as KitSidebar, SidebarCollapsible, SidebarFooter, SidebarGroup, SidebarHeader,
+    SidebarMenu, SidebarMenuItem,
 };
+
+use crate::state::{AppState, DeviceAction, Page};
+use crate::theme::{FONT_SIZE_BODY, FONT_SIZE_CAPTION, RADIUS_FULL, RADIUS_SM, SPACE_2};
 
 pub struct Sidebar;
 
 impl Sidebar {
     pub fn render(
         state: &AppState,
-        on_navigate: impl Fn(Page, &mut Window, &mut App) + 'static + Clone,
-    ) -> Div {
+        on_action: impl Fn(DeviceAction, &mut Window, &mut App) + 'static + Clone,
+    ) -> impl IntoElement {
         let theme = &state.theme;
         let current_page = state.current_page;
-        let has_device = state.active_device.is_some();
+        let active_dev = state.active_device.as_ref();
+        let has_device = active_dev.is_some();
 
-        let mut nav_items = Vec::new();
+        // 1. Sidebar Header with App Branding and Connected Device Status
+        let mut header = SidebarHeader::new();
+        header = header.child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.0))
+                .w_full()
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .w_full()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(SPACE_2)
+                                .child(
+                                    div()
+                                        .size(px(18.0))
+                                        .rounded(RADIUS_SM)
+                                        .bg(theme.accent)
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .text_color(theme.accent_foreground)
+                                        .text_size(px(11.0))
+                                        .font_weight(FontWeight::BOLD)
+                                        .child("🐉"),
+                                )
+                                .child(
+                                    div()
+                                        .text_color(theme.foreground)
+                                        .text_size(FONT_SIZE_BODY)
+                                        .font_weight(FontWeight::BOLD)
+                                        .child("OpenDragon"),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .px(px(6.0))
+                                .py(px(1.0))
+                                .rounded_full()
+                                .bg(theme.surface_hover)
+                                .text_color(theme.foreground_muted)
+                                .text_size(px(10.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child("v0.2"),
+                        ),
+                )
+                .when_some(active_dev, |el, dev| {
+                    el.child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(SPACE_2)
+                            .pt(px(2.0))
+                            .child(div().size(px(6.0)).rounded(RADIUS_FULL).bg(theme.success))
+                            .child(
+                                div()
+                                    .text_color(theme.foreground_muted)
+                                    .text_size(FONT_SIZE_CAPTION)
+                                    .child(dev.summary.model.clone()),
+                            ),
+                    )
+                }),
+        );
+
+        // 2. Hardware Navigation Items
+        let mut groups = Vec::new();
 
         if has_device {
-            nav_items.push((Page::Overview, "Overview", "⊞"));
+            let mut hw_menu = SidebarMenu::new();
+
+            // Overview
+            let on_act = on_action.clone();
+            hw_menu = hw_menu.child(
+                SidebarMenuItem::new("Overview")
+                    .icon(IconName::LayoutDashboard)
+                    .active(current_page == Page::Overview)
+                    .on_click(move |_, w, a| on_act(DeviceAction::Navigate(Page::Overview), w, a)),
+            );
+
+            // Lighting
             if state.has_capability(opendragon_core::capability::Capability::Lighting) {
-                nav_items.push((Page::Lighting, "Lighting", "☼"));
+                let on_act = on_action.clone();
+                hw_menu = hw_menu.child(
+                    SidebarMenuItem::new("Lighting")
+                        .icon(IconName::Sun)
+                        .active(current_page == Page::Lighting)
+                        .on_click(move |_, w, a| {
+                            on_act(DeviceAction::Navigate(Page::Lighting), w, a)
+                        }),
+                );
             }
+
+            // Performance
             if state.has_capability(opendragon_core::capability::Capability::Actuation)
                 || state.has_capability(opendragon_core::capability::Capability::RapidTrigger)
             {
-                nav_items.push((Page::Performance, "Performance", "⚡"));
+                let on_act = on_action.clone();
+                hw_menu = hw_menu.child(
+                    SidebarMenuItem::new("Performance")
+                        .icon(IconName::Zap)
+                        .active(current_page == Page::Performance)
+                        .on_click(move |_, w, a| {
+                            on_act(DeviceAction::Navigate(Page::Performance), w, a)
+                        }),
+                );
             }
+
+            // Profiles
             if state.has_capability(opendragon_core::capability::Capability::Profile) {
-                nav_items.push((Page::Profiles, "Profiles", "☰"));
+                let on_act = on_action.clone();
+                hw_menu = hw_menu.child(
+                    SidebarMenuItem::new("Profiles")
+                        .icon(IconName::Layers)
+                        .active(current_page == Page::Profiles)
+                        .on_click(move |_, w, a| {
+                            on_act(DeviceAction::Navigate(Page::Profiles), w, a)
+                        }),
+                );
             }
+
+            // Macros
             if state.has_capability(opendragon_core::capability::Capability::Macro) {
-                nav_items.push((Page::Macros, "Macros", "⌨"));
+                let on_act = on_action.clone();
+                hw_menu = hw_menu.child(
+                    SidebarMenuItem::new("Macros")
+                        .icon(IconName::Terminal)
+                        .active(current_page == Page::Macros)
+                        .on_click(move |_, w, a| {
+                            on_act(DeviceAction::Navigate(Page::Macros), w, a)
+                        }),
+                );
             }
+
+            groups.push(SidebarGroup::new("Hardware").child(hw_menu));
         }
 
-        let mut nav_list = div().flex().flex_col().gap(px(2.0)).w_full();
+        // 3. System Navigation Items
+        let mut sys_menu = SidebarMenu::new();
 
-        for (page, label, icon) in nav_items {
-            let is_active = current_page == page;
-            let bg = if is_active {
-                theme.surface_active
-            } else {
-                hsla(0.0, 0.0, 0.0, 0.0)
-            };
-            let text_color = if is_active {
-                theme.foreground
-            } else {
-                theme.foreground_muted
-            };
-            let border_color = if is_active {
-                theme.accent
-            } else {
-                hsla(0.0, 0.0, 0.0, 0.0)
-            };
+        // Devices (Home)
+        let on_act = on_action.clone();
+        sys_menu = sys_menu.child(
+            SidebarMenuItem::new("Devices")
+                .icon(IconName::Cpu)
+                .active(current_page == Page::Home)
+                .on_click(move |_, w, a| on_act(DeviceAction::Navigate(Page::Home), w, a)),
+        );
 
-            let on_nav = on_navigate.clone();
-            let hover_bg = theme.surface_hover;
-
-            let item = div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .h(CONTROL_HEIGHT_MD)
-                .gap(SPACE_2)
-                .px(SPACE_2)
-                .rounded(RADIUS_SM)
-                .bg(bg)
-                .border_l_2()
-                .border_color(border_color)
-                .text_color(text_color)
-                .text_size(FONT_SIZE_BODY)
-                .font_weight(if is_active {
-                    FontWeight::MEDIUM
-                } else {
-                    FontWeight::NORMAL
-                })
-                .cursor_pointer()
-                .hover(move |mut s| {
-                    if !is_active {
-                        s.background = Some(hover_bg.into());
-                    }
-                    s
-                })
-                .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                    on_nav(page, window, cx);
-                })
-                .child(
-                    div()
-                        .size(px(16.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_size(FONT_SIZE_BODY)
-                        .child(icon),
-                )
-                .child(label);
-
-            nav_list = nav_list.child(item);
-        }
-
-        // Bottom items: Devices (Home), Diagnostics, Settings
-        let mut bottom_list = div().flex().flex_col().gap(px(2.0)).w_full();
-
-        let mut bottom_items = vec![(Page::Home, "Devices", "❖")];
+        // Diagnostics
         if has_device {
-            bottom_items.push((Page::Diagnostics, "Diagnostics", "⌥"));
+            let on_act = on_action.clone();
+            sys_menu = sys_menu.child(
+                SidebarMenuItem::new("Diagnostics")
+                    .icon(IconName::Activity)
+                    .active(current_page == Page::Diagnostics)
+                    .on_click(move |_, w, a| {
+                        on_act(DeviceAction::Navigate(Page::Diagnostics), w, a)
+                    }),
+            );
         }
-        bottom_items.push((Page::Settings, "Settings", "⚙"));
 
-        for (page, label, icon) in bottom_items {
-            let is_active = current_page == page;
-            let bg = if is_active {
-                theme.surface_active
-            } else {
-                hsla(0.0, 0.0, 0.0, 0.0)
-            };
-            let text_color = if is_active {
-                theme.foreground
-            } else {
-                theme.foreground_muted
-            };
-            let border_color = if is_active {
-                theme.accent
-            } else {
-                hsla(0.0, 0.0, 0.0, 0.0)
-            };
+        // Settings
+        let on_act = on_action.clone();
+        sys_menu = sys_menu.child(
+            SidebarMenuItem::new("Settings")
+                .icon(IconName::Settings)
+                .active(current_page == Page::Settings)
+                .on_click(move |_, w, a| on_act(DeviceAction::Navigate(Page::Settings), w, a)),
+        );
 
-            let on_nav = on_navigate.clone();
-            let hover_bg = theme.surface_hover;
+        groups.push(SidebarGroup::new("System").child(sys_menu));
 
-            let item = div()
+        // 4. Sidebar Footer
+        let on_act_refresh = on_action.clone();
+        let footer = SidebarFooter::new().child(
+            div()
                 .flex()
                 .flex_row()
                 .items_center()
-                .h(CONTROL_HEIGHT_MD)
-                .gap(SPACE_2)
-                .px(SPACE_2)
-                .rounded(RADIUS_SM)
-                .bg(bg)
-                .border_l_2()
-                .border_color(border_color)
-                .text_color(text_color)
-                .text_size(FONT_SIZE_BODY)
-                .font_weight(if is_active {
-                    FontWeight::MEDIUM
-                } else {
-                    FontWeight::NORMAL
-                })
-                .cursor_pointer()
-                .hover(move |mut s| {
-                    if !is_active {
-                        s.background = Some(hover_bg.into());
-                    }
-                    s
-                })
-                .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                    on_nav(page, window, cx);
-                })
+                .justify_between()
+                .w_full()
                 .child(
                     div()
-                        .size(px(16.0))
                         .flex()
+                        .flex_row()
                         .items_center()
-                        .justify_center()
-                        .text_size(FONT_SIZE_BODY)
-                        .child(icon),
+                        .gap(SPACE_2)
+                        .cursor_pointer()
+                        .on_mouse_down(MouseButton::Left, move |_e, w, a| {
+                            on_act_refresh(DeviceAction::RefreshDevices, w, a);
+                        })
+                        .child(
+                            div()
+                                .text_color(theme.foreground_muted)
+                                .text_size(FONT_SIZE_CAPTION)
+                                .child("↻ Scan USB"),
+                        ),
                 )
-                .child(label);
+                .child(
+                    div()
+                        .text_color(theme.foreground_subtle)
+                        .text_size(FONT_SIZE_CAPTION)
+                        .child("Ctrl+R"),
+                ),
+        );
 
-            bottom_list = bottom_list.child(item);
-        }
-
-        // Top App Header
-        let app_header = div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(SPACE_2)
-            .px(SPACE_2)
-            .py(SPACE_2)
-            .child(
-                div()
-                    .size(px(24.0))
-                    .rounded(RADIUS_SM)
-                    .bg(theme.accent)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_color(hsla(0.0, 0.0, 1.0, 1.0))
-                    .text_size(FONT_SIZE_CAPTION)
-                    .font_weight(FontWeight::BOLD)
-                    .child("OD"),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .text_color(theme.foreground)
-                            .text_size(FONT_SIZE_BODY)
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child("OpenDragon-rs"),
-                    )
-                    .child(
-                        div()
-                            .text_color(theme.foreground_muted)
-                            .text_size(FONT_SIZE_CAPTION)
-                            .child("v0.2.0"),
-                    ),
-            );
-
-        // Sidebar container
-        div()
-            .w(SIDEBAR_WIDTH)
-            .h_full()
-            .flex()
-            .flex_col()
-            .justify_between()
-            .p(SPACE_2)
-            .bg(theme.surface)
-            .border_r_1()
-            .border_color(theme.border)
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(SPACE_4)
-                    .w_full()
-                    .child(app_header)
-                    .child(nav_list),
-            )
-            .child(bottom_list)
+        KitSidebar::new("app_sidebar")
+            .collapsible(SidebarCollapsible::None)
+            .header(header)
+            .children(groups)
+            .footer(footer)
     }
 }

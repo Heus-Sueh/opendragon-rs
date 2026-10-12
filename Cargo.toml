@@ -29,3 +29,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.5", features = ["derive", "env"] }
 hidapi = "2.6"
+
+# Ensure GPUI, shaders, and font rasterization run at full native speed even during development
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2

@@ -1,7 +1,8 @@
 use gpui::prelude::*;
 use gpui::*;
+use gpui_kit::component::badge::Badge as KitBadge;
 
-use crate::theme::{Theme, FONT_SIZE_CAPTION, RADIUS_FULL, RADIUS_SM, SPACE_2};
+use crate::theme::{Theme, FONT_SIZE_CAPTION, RADIUS_SM, SPACE_2};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BadgeStatus {
@@ -60,13 +61,12 @@ impl StatusBadge {
                 theme.warning,
                 hsla(38.0 / 360.0, 0.90, 0.50, 0.12),
                 theme.warning,
-                "Partial support",
+                "Partial",
             ),
         };
 
-        let label = self
-            .custom_label
-            .unwrap_or_else(|| SharedString::from(default_label));
+        let label = self.custom_label.unwrap_or_else(|| default_label.into());
+        let dot = KitBadge::new().dot().color(dot_color);
 
         div()
             .flex()
@@ -74,10 +74,10 @@ impl StatusBadge {
             .items_center()
             .gap(SPACE_2)
             .px(SPACE_2)
-            .py(px(2.0))
+            .py(px(3.0))
             .rounded(RADIUS_SM)
             .bg(bg_color)
-            .child(div().size(px(6.0)).rounded(RADIUS_FULL).bg(dot_color))
+            .child(dot)
             .child(
                 div()
                     .text_color(text_color)

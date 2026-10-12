@@ -4,7 +4,7 @@ use gpui::*;
 use opendragon_core::profile::ProfileId;
 
 use crate::components::{BadgeStatus, Button, Card, InfoTooltip, StatusBadge};
-use crate::state::AppState;
+use crate::state::{AppState, DeviceAction};
 use crate::theme::{
     FONT_SIZE_BODY, FONT_SIZE_CAPTION, FONT_SIZE_HEADING, FONT_SIZE_SM, FONT_SIZE_TITLE, RADIUS_MD,
     RADIUS_SM, SPACE_1, SPACE_2, SPACE_3, SPACE_6,
@@ -15,10 +15,22 @@ pub struct ProfilesView;
 impl ProfilesView {
     pub fn render(
         state: &AppState,
-        on_switch_profile: impl Fn(ProfileId, &mut Window, &mut App) + 'static + Clone,
-        on_add_profile: impl Fn(String, &mut Window, &mut App) + 'static + Clone,
-        on_delete_profile: impl Fn(ProfileId, &mut Window, &mut App) + 'static + Clone,
+        on_action: impl Fn(DeviceAction, &mut Window, &mut App) + 'static + Clone,
     ) -> Div {
+        let on_act_switch = on_action.clone();
+        let on_switch_profile = move |id: ProfileId, w: &mut Window, a: &mut App| {
+            on_act_switch(DeviceAction::SwitchProfile(id), w, a);
+        };
+
+        let on_act_add = on_action.clone();
+        let on_add_profile = move |name: String, w: &mut Window, a: &mut App| {
+            on_act_add(DeviceAction::AddProfile(name), w, a);
+        };
+
+        let on_act_del = on_action.clone();
+        let on_delete_profile = move |id: ProfileId, w: &mut Window, a: &mut App| {
+            on_act_del(DeviceAction::DeleteProfile(id), w, a);
+        };
         let theme = &state.theme;
         let active = match &state.active_device {
             Some(dev) => dev,
@@ -56,7 +68,7 @@ impl ProfilesView {
                     ),
             )
             .child(
-                Button::primary("+ New Profile")
+                Button::primary("+ New profile")
                     .size(crate::components::ButtonSize::Sm)
                     .on_click(move |_e, w, a| {
                         on_add(new_profile_name.clone(), w, a);

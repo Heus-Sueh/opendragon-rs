@@ -2,7 +2,7 @@ use gpui::prelude::*;
 use gpui::*;
 
 use crate::components::{BadgeStatus, Button, Card, EmptyState, StatusBadge};
-use crate::state::AppState;
+use crate::state::{AppState, DeviceAction};
 use crate::theme::{
     FONT_SIZE_BODY, FONT_SIZE_CAPTION, FONT_SIZE_SM, FONT_SIZE_TITLE, RADIUS_SM, SPACE_1, SPACE_2,
     SPACE_3, SPACE_4, SPACE_6,
@@ -13,9 +13,7 @@ pub struct HomeView;
 impl HomeView {
     pub fn render(
         state: &AppState,
-        on_select: impl Fn(String, &mut Window, &mut App) + 'static + Clone,
-        on_refresh: impl Fn(&mut Window, &mut App) + 'static + Clone,
-        on_export: impl Fn(String, &mut Window, &mut App) + 'static + Clone,
+        on_action: impl Fn(DeviceAction, &mut Window, &mut App) + 'static + Clone,
     ) -> Div {
         let theme = &state.theme;
 
@@ -45,10 +43,10 @@ impl HomeView {
                     ),
             )
             .child({
-                let on_ref = on_refresh.clone();
+                let on_act = on_action.clone();
                 Button::new("Refresh Devices")
                     .size(crate::components::ButtonSize::Md)
-                    .on_click(move |_e, w, a| on_ref(w, a))
+                    .on_click(move |_e, w, a| on_act(DeviceAction::RefreshDevices, w, a))
                     .render(theme)
             });
 
@@ -61,7 +59,7 @@ impl HomeView {
             .child(header);
 
         if state.devices.is_empty() {
-            let on_ref = on_refresh.clone();
+            let on_act = on_action.clone();
             let empty = EmptyState::new(
                 "No Redragon device detected",
                 "Connect a supported Redragon keyboard or mouse to configure it.",
@@ -69,7 +67,7 @@ impl HomeView {
             .icon("⌨")
             .action(
                 Button::primary("Check for devices")
-                    .on_click(move |_e, w, a| on_ref(w, a))
+                    .on_click(move |_e, w, a| on_act(DeviceAction::RefreshDevices, w, a))
                     .render(theme),
             )
             .render(theme);
@@ -81,14 +79,14 @@ impl HomeView {
             for dev in &state.devices {
                 let dev_id = dev.id.clone();
                 let is_supported = dev.is_supported;
-                let on_sel = on_select.clone();
-                let on_exp = on_export.clone();
+                let on_act = on_action.clone();
 
                 if is_supported {
+                    let on_act_card = on_act.clone();
                     let card = Card::new()
                         .interactive(true)
                         .on_click(move |_e, w, a| {
-                            on_sel(dev_id.clone(), w, a);
+                            on_act_card(DeviceAction::SelectDevice(dev_id.clone()), w, a);
                         })
                         .child(
                             div()
@@ -103,7 +101,16 @@ impl HomeView {
                                         .flex_row()
                                         .items_center()
                                         .gap(SPACE_3)
-                                        .child(
+                                        .child({
+                                            let icon = if dev.capabilities.contains(
+                                                &opendragon_core::capability::Capability::Dpi,
+                                            ) && !dev.capabilities.contains(
+                                                &opendragon_core::capability::Capability::Actuation,
+                                            ) {
+                                                "🖱"
+                                            } else {
+                                                "⌨"
+                                            };
                                             div()
                                                 .size(px(36.0))
                                                 .rounded(RADIUS_SM)
@@ -113,8 +120,8 @@ impl HomeView {
                                                 .justify_center()
                                                 .text_color(theme.accent)
                                                 .text_size(px(16.0))
-                                                .child("⌨"),
-                                        )
+                                                .child(icon)
+                                        })
                                         .child(
                                             div()
                                                 .flex()
@@ -146,10 +153,20 @@ impl HomeView {
                                         )
                                         .child(
                                             div()
+                                                .flex()
+                                                .flex_row()
+                                                .items_center()
+                                                .gap(SPACE_1)
                                                 .text_color(theme.accent)
                                                 .text_size(FONT_SIZE_SM)
                                                 .font_weight(FontWeight::MEDIUM)
-                                                .child("Configure →"),
+                                                .child("Configure")
+                                                .child(
+                                                    div()
+                                                        .text_color(theme.foreground_subtle)
+                                                        .text_size(FONT_SIZE_BODY)
+                                                        .child("›"),
+                                                ),
                                         ),
                                 ),
                         )
@@ -200,14 +217,19 @@ impl HomeView {
                                                 )),
                                         ),
                                 )
-                                .child(
+                                .child({
+                                    let on_act = on_act.clone();
                                     Button::new("Export report")
                                         .size(crate::components::ButtonSize::Sm)
                                         .on_click(move |_e, w, a| {
-                                             on_exp(dev_id_exp.clone(), w, a);
+                                            on_act(
+                                                DeviceAction::ExportDeviceDiagnostics(dev_id_exp.clone()),
+                                                w,
+                                                a,
+                                            );
                                         })
-                                        .render(theme),
-                                ),
+                                        .render(theme)
+                                }),
                         )
                         .render(theme);
 

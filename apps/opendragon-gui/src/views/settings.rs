@@ -1,11 +1,10 @@
 use gpui::prelude::*;
 use gpui::*;
 
-use crate::components::{Button, Card, Switch};
-use crate::state::{AppState, Page};
+use crate::components::{Button, Card, SegmentedControl, SettingRow, Switch};
+use crate::state::{AppState, DeviceAction, KeyboardLayout, Page};
 use crate::theme::{
-    ThemeMode, CONTROL_HEIGHT_MD, FONT_SIZE_HEADING, FONT_SIZE_SM, FONT_SIZE_TITLE, RADIUS_SM,
-    SPACE_1, SPACE_2, SPACE_3, SPACE_6,
+    ThemeMode, FONT_SIZE_HEADING, FONT_SIZE_SM, FONT_SIZE_TITLE, SPACE_1, SPACE_2, SPACE_3, SPACE_6,
 };
 
 pub struct SettingsView;
@@ -13,10 +12,27 @@ pub struct SettingsView;
 impl SettingsView {
     pub fn render(
         state: &AppState,
-        on_theme_change: impl Fn(ThemeMode, &mut Window, &mut App) + 'static + Clone,
-        on_auto_connect_toggle: impl Fn(bool, &mut Window, &mut App) + 'static + Clone,
-        on_navigate: impl Fn(Page, &mut Window, &mut App) + 'static + Clone,
+        on_action: impl Fn(DeviceAction, &mut Window, &mut App) + 'static + Clone,
     ) -> Div {
+        let on_act_theme = on_action.clone();
+        let on_theme_change = move |mode: ThemeMode, w: &mut Window, a: &mut App| {
+            on_act_theme(DeviceAction::SetThemeMode(mode), w, a);
+        };
+
+        let on_act_auto = on_action.clone();
+        let on_auto_connect_toggle = move |enabled: bool, w: &mut Window, a: &mut App| {
+            on_act_auto(DeviceAction::SetAutoConnect(enabled), w, a);
+        };
+
+        let on_act_layout = on_action.clone();
+        let on_layout_change = move |layout: KeyboardLayout, w: &mut Window, a: &mut App| {
+            on_act_layout(DeviceAction::SetKeyboardLayout(layout), w, a);
+        };
+
+        let on_act_nav = on_action.clone();
+        let on_navigate = move |page: Page, w: &mut Window, a: &mut App| {
+            on_act_nav(DeviceAction::Navigate(page), w, a);
+        };
         let theme = &state.theme;
         let current_theme_mode = state.preferences.theme_mode;
 
@@ -46,43 +62,9 @@ impl SettingsView {
             (ThemeMode::System, "System"),
         ];
 
-        let mut theme_buttons = div().flex().flex_row().gap(SPACE_2);
-
-        for (mode, label) in theme_options {
-            let is_active = current_theme_mode == mode;
-            let on_th = on_theme_change.clone();
-
-            let btn = div()
-                .flex_1()
-                .h(CONTROL_HEIGHT_MD)
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(RADIUS_SM)
-                .bg(if is_active {
-                    theme.accent
-                } else {
-                    theme.surface_hover
-                })
-                .text_color(if is_active {
-                    hsla(0.0, 0.0, 1.0, 1.0)
-                } else {
-                    theme.foreground
-                })
-                .text_size(FONT_SIZE_SM)
-                .font_weight(if is_active {
-                    FontWeight::SEMIBOLD
-                } else {
-                    FontWeight::NORMAL
-                })
-                .cursor_pointer()
-                .on_mouse_down(MouseButton::Left, move |_e, w, a| {
-                    on_th(mode, w, a);
-                })
-                .child(label);
-
-            theme_buttons = theme_buttons.child(btn);
-        }
+        let theme_control = SegmentedControl::new(theme_options, current_theme_mode)
+            .on_select(on_theme_change)
+            .render(theme);
 
         let appearance_card = Card::new()
             .child(
@@ -103,16 +85,34 @@ impl SettingsView {
                             .text_size(FONT_SIZE_SM)
                             .child("Select color theme for OpenDragon-rs"),
                     )
-                    .child(theme_buttons),
+                    .child(theme_control),
             )
             .render(theme);
 
-        // General Options
+        // Hardware & General Options
+        let layout_options = [
+            (KeyboardLayout::Ansi, "ANSI (US)"),
+            (KeyboardLayout::Abnt2, "ABNT2 (Brasil)"),
+            (KeyboardLayout::Iso, "ISO (Europe)"),
+        ];
+
+        let layout_control =
+            SegmentedControl::new(layout_options, state.preferences.keyboard_layout)
+                .on_select(on_layout_change)
+                .render(theme);
+
+        let layout_row = SettingRow::new("Physical Keyboard Layout")
+            .flat(true)
+            .description("Select the physical layout standard and keymap used for previews and visual key mapping")
+            .control(layout_control)
+            .render(theme);
+
         let on_ac = on_auto_connect_toggle.clone();
         let auto_connect_switch = Switch::new(
             "Auto-connect to known devices",
             state.preferences.auto_connect,
         )
+        .flat(true)
         .description(
             "Automatically open the configuration page when exactly one device is detected",
         )
@@ -132,8 +132,10 @@ impl SettingsView {
                             .text_color(theme.foreground)
                             .text_size(FONT_SIZE_HEADING)
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("General"),
+                            .child("Hardware & General"),
                     )
+                    .child(layout_row)
+                    .child(div().h_px().w_full().bg(theme.border_subtle))
                     .child(auto_connect_switch),
             )
             .render(theme);
@@ -171,7 +173,7 @@ impl SettingsView {
                     )
                     .child(
                         Button::new(if has_active_device {
-                            "Open Diagnostics →"
+                            "Open diagnostics"
                         } else {
                             "No device connected"
                         })

@@ -18,7 +18,7 @@ fn main() {
     tracing::info!("Starting OpenDragon-rs GUI");
 
     gpui_kit::application()
-        .with_assets(gpui_kit::assets::Assets)
+        .with_assets(gpui_kit::assets::AllAssets)
         .run(|cx: &mut App| {
             gpui_kit::init(cx);
 
@@ -28,6 +28,14 @@ fn main() {
             // Set global theme from initial state
             let theme = state.read(cx).theme;
             cx.set_global(theme);
+
+            let kit_mode = match state.read(cx).preferences.theme_mode {
+                crate::theme::ThemeMode::Light => gpui_kit::component::ThemeMode::Light,
+                crate::theme::ThemeMode::Dark | crate::theme::ThemeMode::System => {
+                    gpui_kit::component::ThemeMode::Dark
+                }
+            };
+            gpui_kit::component::Theme::change(kit_mode, None, cx);
 
             let options = WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds {

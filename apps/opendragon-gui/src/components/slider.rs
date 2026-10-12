@@ -18,6 +18,9 @@ pub struct Slider {
     step: f32,
     unit: &'static str,
     show_stepper: bool,
+    flat: bool,
+    max_width: Option<Pixels>,
+    accent_color: Option<Hsla>,
     presets: Vec<(f32, SharedString)>,
     on_change: Option<SliderChangeHandler>,
 }
@@ -32,9 +35,27 @@ impl Slider {
             step: 0.1,
             unit: "",
             show_stepper: true,
+            flat: false,
+            max_width: None,
+            accent_color: None,
             presets: Vec::new(),
             on_change: None,
         }
+    }
+
+    pub fn max_width(mut self, width: Pixels) -> Self {
+        self.max_width = Some(width);
+        self
+    }
+
+    pub fn accent_color(mut self, color: Hsla) -> Self {
+        self.accent_color = Some(color);
+        self
+    }
+
+    pub fn flat(mut self, flat: bool) -> Self {
+        self.flat = flat;
+        self
     }
 
     pub fn step(mut self, step: f32) -> Self {
@@ -79,16 +100,24 @@ impl Slider {
         let cur_val = self.value;
 
         // Container
-        let mut container = div()
-            .flex()
-            .flex_col()
-            .gap(SPACE_2)
-            .w_full()
-            .p(SPACE_3)
-            .rounded(RADIUS_MD)
-            .bg(theme.surface)
-            .border_1()
-            .border_color(theme.border);
+        let mut container = div().flex().flex_col().gap(SPACE_2).w_full();
+
+        if let Some(max_w) = self.max_width {
+            container = container.max_w(max_w);
+        }
+
+        if !self.flat {
+            container = container
+                .p(SPACE_3)
+                .rounded(RADIUS_MD)
+                .bg(theme.surface)
+                .border_1()
+                .border_color(theme.border);
+        } else {
+            container = container.py(SPACE_1);
+        }
+
+        let active_bg = self.accent_color.unwrap_or(theme.accent);
 
         // Header with label and value
         let header = div()
@@ -106,7 +135,7 @@ impl Slider {
             )
             .child(
                 div()
-                    .text_color(theme.accent)
+                    .text_color(active_bg)
                     .text_size(FONT_SIZE_SM)
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(val_text),
@@ -116,7 +145,6 @@ impl Slider {
 
         // Slider track
         let track_bg = theme.surface_active;
-        let active_bg = theme.accent;
 
         let mut track_wrapper = div().flex().flex_row().items_center().w_full().gap(SPACE_2);
 
@@ -148,9 +176,17 @@ impl Slider {
             track_wrapper = track_wrapper.child(minus_btn);
         }
 
-        // Interactive Track
-        const NUM_SEGMENTS: usize = 30;
-        let mut segments_row = div().absolute().inset_0().flex().flex_row().items_center();
+        // Interactive Track Segments
+        const NUM_SEGMENTS: usize = 12;
+        let mut segments_row = div()
+            .absolute()
+            .left(px(7.0))
+            .right(px(7.0))
+            .top_0()
+            .bottom_0()
+            .flex()
+            .flex_row()
+            .items_center();
 
         for i in 0..NUM_SEGMENTS {
             let frac = i as f32 / (NUM_SEGMENTS - 1) as f32;
@@ -162,28 +198,20 @@ impl Slider {
 
             if let Some(ref cb) = self.on_change {
                 let cb1 = cb.clone();
-                let cb2 = cb.clone();
-                seg = seg
-                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                        cb1(seg_val, window, cx);
-                    })
-                    .on_mouse_move(move |event, window, cx| {
-                        if event.pressed_button == Some(MouseButton::Left) {
-                            cb2(seg_val, window, cx);
-                        }
-                    });
+                seg = seg.on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                    cb1(seg_val, window, cx);
+                });
             }
 
             segments_row = segments_row.child(seg);
         }
-
-        let thumb_left = (percent * 0.95).max(0.0);
 
         let track = div()
             .flex_1()
             .h(px(20.0))
             .flex()
             .items_center()
+            .px(px(7.0))
             .relative()
             .child(
                 // Visual track bar
@@ -199,23 +227,24 @@ impl Slider {
                             .h_full()
                             .w(relative(percent))
                             .rounded(RADIUS_SM)
-                            .bg(active_bg),
-                    )
-                    .child(
-                        // Draggable thumb (14px with 3px radius)
-                        div()
-                            .absolute()
-                            .top(px(-5.0))
-                            .left(relative(thumb_left))
-                            .size(px(14.0))
-                            .rounded(RADIUS_SM)
-                            .bg(if theme.is_dark {
-                                hsla(0.0, 0.0, 0.95, 1.0)
-                            } else {
-                                hsla(0.0, 0.0, 1.0, 1.0)
-                            })
-                            .border_2()
-                            .border_color(theme.accent),
+                            .bg(active_bg)
+                            .relative()
+                            .child(
+                                // Draggable thumb anchored to end of active track
+                                div()
+                                    .absolute()
+                                    .top(px(-5.0))
+                                    .right(px(-7.0))
+                                    .size(px(14.0))
+                                    .rounded_full()
+                                    .bg(if theme.is_dark {
+                                        hsla(0.0, 0.0, 0.98, 1.0)
+                                    } else {
+                                        hsla(0.0, 0.0, 0.05, 1.0)
+                                    })
+                                    .border_2()
+                                    .border_color(theme.background),
+                            ),
                     ),
             )
             .child(segments_row);
@@ -264,7 +293,7 @@ impl Slider {
                     .py(SPACE_1)
                     .rounded(RADIUS_SM)
                     .bg(if is_selected {
-                        theme.accent
+                        active_bg
                     } else {
                         theme.surface_hover
                     })
@@ -276,13 +305,13 @@ impl Slider {
                         }
                     })
                     .text_color(if is_selected {
-                        hsla(0.0, 0.0, 1.0, 1.0)
+                        theme.accent_foreground
                     } else {
                         theme.foreground_muted
                     })
                     .text_size(FONT_SIZE_CAPTION)
                     .font_weight(if is_selected {
-                        FontWeight::SEMIBOLD
+                        FontWeight::BOLD
                     } else {
                         FontWeight::NORMAL
                     })

@@ -2,7 +2,7 @@ use gpui::prelude::*;
 use gpui::*;
 
 use crate::components::{Button, Card, EmptyState, InfoTooltip};
-use crate::state::AppState;
+use crate::state::{AppState, DeviceAction};
 use crate::theme::{
     FONT_SIZE_BODY, FONT_SIZE_CAPTION, FONT_SIZE_HEADING, FONT_SIZE_SM, FONT_SIZE_TITLE, RADIUS_SM,
     SPACE_1, SPACE_2, SPACE_3, SPACE_6,
@@ -11,7 +11,10 @@ use crate::theme::{
 pub struct MacrosView;
 
 impl MacrosView {
-    pub fn render(state: &AppState) -> Div {
+    pub fn render(
+        state: &AppState,
+        _on_action: impl Fn(DeviceAction, &mut Window, &mut App) + 'static + Clone,
+    ) -> Div {
         let theme = &state.theme;
         let active = match &state.active_device {
             Some(dev) => dev,
@@ -52,7 +55,7 @@ impl MacrosView {
                     .gap(SPACE_3)
                     .child(InfoTooltip::new("EVision Hardware Macro Engine").render(theme))
                     .child(
-                        Button::primary("+ New Macro")
+                        Button::primary("+ New macro")
                             .size(crate::components::ButtonSize::Sm)
                             .render(theme),
                     ),
@@ -73,7 +76,7 @@ impl MacrosView {
             )
             .icon("⌨")
             .action(
-                Button::primary("+ New Macro")
+                Button::primary("+ New macro")
                     .size(crate::components::ButtonSize::Sm)
                     .render(theme),
             )

@@ -1,9 +1,10 @@
 use gpui::prelude::*;
 use gpui::*;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::Root;
 
 use crate::components::Sidebar;
-use crate::state::{AppState, Page, ToastType};
+use crate::state::{AppState, DeviceAction, Page, ToastType};
 use crate::theme::{RADIUS_MD, SPACE_2, SPACE_3, SPACE_4};
 use crate::views::{
     DeviceOverview, DiagnosticsView, HomeView, LightingView, MacrosView, PerformanceView,
@@ -12,6 +13,8 @@ use crate::views::{
 
 pub struct OpenDragonApp {
     pub state: Entity<AppState>,
+    pub focus_handle: FocusHandle,
+    pub scroll_handle: ScrollHandle,
 }
 
 impl OpenDragonApp {
@@ -20,7 +23,13 @@ impl OpenDragonApp {
             cx.notify();
         })
         .detach();
-        Self { state }
+        let focus_handle = cx.focus_handle();
+        let scroll_handle = ScrollHandle::new();
+        Self {
+            state,
+            focus_handle,
+            scroll_handle,
+        }
     }
 }
 
@@ -31,256 +40,44 @@ impl Render for OpenDragonApp {
         let current_page = state.current_page;
         let toast = state.toast.clone();
 
-        // Callbacks for subviews
-        let state_nav = self.state.clone();
-        let on_navigate = move |page: Page, _w: &mut Window, cx: &mut App| {
-            state_nav.update(cx, |s, cx| {
-                s.navigate_to(page);
-                cx.notify();
-            });
-        };
-
-        let state_sel = self.state.clone();
-        let on_select_device = move |dev_id: String, _w: &mut Window, cx: &mut App| {
-            state_sel.update(cx, |s, cx| {
-                s.select_device(&dev_id);
-                cx.notify();
-            });
-        };
-
-        let state_ref = self.state.clone();
-        let on_refresh = move |_w: &mut Window, cx: &mut App| {
-            state_ref.update(cx, |s, cx| {
-                s.refresh_devices();
-                cx.notify();
-            });
-        };
-
-        let state_exp = self.state.clone();
-        let on_export_unsupported = move |dev_id: String, _w: &mut Window, cx: &mut App| {
-            state_exp.update(cx, |s, cx| {
-                let report = {
-                    let b = s.backend.lock().unwrap();
-                    b.get_probe_report(&dev_id).unwrap_or_default()
-                };
-                s.set_toast(
-                    format!("Exported diagnostic report for device {dev_id}"),
-                    ToastType::Info,
-                );
-                tracing::info!("Device diagnostic export:\n{report}");
-                cx.notify();
-            });
-        };
-
-        let state_light = self.state.clone();
-        let on_update_lighting =
-            move |cfg: opendragon_core::lighting::LightingConfig, _w: &mut Window, cx: &mut App| {
-                state_light.update(cx, |s, cx| {
-                    s.update_lighting(cfg);
-                    cx.notify();
-                });
-            };
-
-        let state_bright = self.state.clone();
-        let on_brightness_change = move |bright: u8, _w: &mut Window, cx: &mut App| {
-            state_bright.update(cx, |s, cx| {
-                if let Some(act) = &s.active_device {
-                    let mut cfg = act.lighting.clone();
-                    cfg.brightness = bright;
-                    s.update_lighting(cfg);
-                    cx.notify();
-                }
-            });
-        };
-
-        let state_act = self.state.clone();
-        let on_update_actuation =
-            move |pt: opendragon_core::actuation::ActuationPoint, _w: &mut Window, cx: &mut App| {
-                state_act.update(cx, |s, cx| {
-                    s.update_actuation(pt);
-                    cx.notify();
-                });
-            };
-
-        let state_rt = self.state.clone();
-        let on_update_rapid_trigger =
-            move |cfg: opendragon_core::rapid_trigger::RapidTriggerConfig,
-                  _w: &mut Window,
-                  cx: &mut App| {
-                state_rt.update(cx, |s, cx| {
-                    s.update_rapid_trigger(cfg);
-                    cx.notify();
-                });
-            };
-
-        let state_rt_tog = self.state.clone();
-        let on_rapid_trigger_toggle = move |enabled: bool, _w: &mut Window, cx: &mut App| {
-            state_rt_tog.update(cx, |s, cx| {
-                if let Some(act) = &s.active_device {
-                    let mut cfg = act.rapid_trigger;
-                    cfg.enabled = enabled;
-                    s.update_rapid_trigger(cfg);
-                    cx.notify();
-                }
-            });
-        };
-
-        let state_pr = self.state.clone();
-        let on_update_polling_rate = move |rate: opendragon_core::polling_rate::PollingRate,
-                                           _w: &mut Window,
-                                           cx: &mut App| {
-            state_pr.update(cx, |s, cx| {
-                s.update_polling_rate(rate);
-                cx.notify();
-            });
-        };
-
-        let state_prof = self.state.clone();
-        let on_switch_profile =
-            move |pid: opendragon_core::profile::ProfileId, _w: &mut Window, cx: &mut App| {
-                state_prof.update(cx, |s, cx| {
-                    s.switch_profile(pid);
-                    cx.notify();
-                });
-            };
-
-        let state_add_prof = self.state.clone();
-        let on_add_profile = move |name: String, _w: &mut Window, cx: &mut App| {
-            state_add_prof.update(cx, |s, cx| {
-                s.add_profile(name);
-                cx.notify();
-            });
-        };
-
-        let state_del_prof = self.state.clone();
-        let on_delete_profile =
-            move |pid: opendragon_core::profile::ProfileId, _w: &mut Window, cx: &mut App| {
-                state_del_prof.update(cx, |s, cx| {
-                    s.delete_profile(pid);
-                    cx.notify();
-                });
-            };
-
-        let state_theme = self.state.clone();
-        let on_theme_change =
-            move |mode: crate::theme::ThemeMode, _w: &mut Window, cx: &mut App| {
-                state_theme.update(cx, |s, cx| {
-                    s.set_theme_mode(mode);
-                    cx.notify();
-                });
-            };
-
-        let state_ac = self.state.clone();
-        let on_auto_connect_toggle = move |enabled: bool, _w: &mut Window, cx: &mut App| {
-            state_ac.update(cx, |s, cx| {
-                s.set_auto_connect(enabled);
-                cx.notify();
-            });
-        };
-
-        let state_key = self.state.clone();
-        let on_key_click = move |key_id: u8, _w: &mut Window, cx: &mut App| {
-            state_key.update(cx, |s, cx| {
-                s.toggle_key_selection(key_id);
-                cx.notify();
-            });
-        };
-
-        let state_key_drag = self.state.clone();
-        let on_key_drag = move |key_id: u8, _w: &mut Window, cx: &mut App| {
-            state_key_drag.update(cx, |s, cx| {
-                if let Some(act) = &s.active_device {
-                    if !act.visual_state.selected_keys.contains(&key_id) {
-                        s.select_key(key_id);
-                        cx.notify();
+        // Single Unified Action Dispatcher Seam
+        let state_dispatch = self.state.clone();
+        let on_action = move |action: DeviceAction, _w: &mut Window, cx: &mut App| {
+            if let DeviceAction::SetThemeMode(mode) = &action {
+                let kit_mode = match mode {
+                    crate::theme::ThemeMode::Light => gpui_kit::component::ThemeMode::Light,
+                    crate::theme::ThemeMode::Dark | crate::theme::ThemeMode::System => {
+                        gpui_kit::component::ThemeMode::Dark
                     }
-                }
-            });
-        };
-
-        let state_clr = self.state.clone();
-        let on_clear_selection = move |_w: &mut Window, cx: &mut App| {
-            state_clr.update(cx, |s, cx| {
-                s.clear_key_selection();
+                };
+                gpui_kit::component::Theme::change(kit_mode, None, cx);
+            }
+            state_dispatch.update(cx, |s, cx| {
+                s.dispatch(action);
                 cx.notify();
-            });
-        };
-
-        let state_dpi = self.state.clone();
-        let on_dpi_change = move |dpi: u16, _w: &mut Window, cx: &mut App| {
-            state_dpi.update(cx, |s, cx| {
-                s.update_dpi(dpi);
-                cx.notify();
-            });
-        };
-
-        let state_cp = self.state.clone();
-        let on_copy_info = move |info: String, _w: &mut Window, cx: &mut App| {
-            state_cp.update(cx, |s, cx| {
-                s.set_toast("Technical details copied to log", ToastType::Info);
-                tracing::info!("Technical diagnostic details:\n{info}");
-                cx.notify();
-            });
-        };
-
-        let state_diag_exp = self.state.clone();
-        let on_export_report = move |_w: &mut Window, cx: &mut App| {
-            state_diag_exp.update(cx, |s, cx| {
-                if let Some(act) = &s.active_device {
-                    let report = {
-                        let b = s.backend.lock().unwrap();
-                        b.get_probe_report(&act.summary.id).unwrap_or_default()
-                    };
-                    s.set_toast("Exported probe report to stdout", ToastType::Success);
-                    println!("{report}");
-                    cx.notify();
-                }
             });
         };
 
         // Render page content
         let page_content = match current_page {
-            Page::Home => {
-                HomeView::render(state, on_select_device, on_refresh, on_export_unsupported)
-            }
-            Page::Overview => DeviceOverview::render(
-                state,
-                on_navigate.clone(),
-                on_brightness_change,
-                on_rapid_trigger_toggle,
-                on_key_click,
-                on_key_drag,
-                on_clear_selection,
-                on_dpi_change,
-            ),
-            Page::Lighting => LightingView::render(state, on_update_lighting),
-            Page::Performance => PerformanceView::render(
-                state,
-                on_update_actuation,
-                on_update_rapid_trigger,
-                on_update_polling_rate,
-            ),
-            Page::Profiles => {
-                ProfilesView::render(state, on_switch_profile, on_add_profile, on_delete_profile)
-            }
-            Page::Macros => MacrosView::render(state),
-            Page::Settings => SettingsView::render(
-                state,
-                on_theme_change,
-                on_auto_connect_toggle,
-                on_navigate.clone(),
-            ),
-            Page::Diagnostics => DiagnosticsView::render(state, on_copy_info, on_export_report),
+            Page::Home => HomeView::render(state, on_action.clone()),
+            Page::Overview => DeviceOverview::render(state, on_action.clone()),
+            Page::Lighting => LightingView::render(state, on_action.clone()),
+            Page::Performance => PerformanceView::render(state, on_action.clone()),
+            Page::Profiles => ProfilesView::render(state, on_action.clone()),
+            Page::Macros => MacrosView::render(state, on_action.clone()),
+            Page::Settings => SettingsView::render(state, on_action.clone()),
+            Page::Diagnostics => DiagnosticsView::render(state, on_action.clone()),
         };
 
         // Sidebar
-        let sidebar = Sidebar::render(state, on_navigate);
+        let sidebar = Sidebar::render(state, on_action.clone());
 
         // Toast element if present
         let toast_el = toast.map(|(msg, t_type)| {
             let (bg, text_color, icon) = match t_type {
                 ToastType::Success => (theme.success, hsla(0.0, 0.0, 1.0, 1.0), "✓"),
-                ToastType::Info => (theme.accent, hsla(0.0, 0.0, 1.0, 1.0), "ℹ"),
+                ToastType::Info => (theme.accent, theme.accent_foreground, "ℹ"),
                 ToastType::Warning => (theme.warning, hsla(0.0, 0.0, 0.1, 1.0), "⚠"),
                 ToastType::Error => (theme.danger, hsla(0.0, 0.0, 1.0, 1.0), "✕"),
             };
@@ -313,20 +110,53 @@ impl Render for OpenDragonApp {
                 .child(msg)
         });
 
-        // Main Shell
+        let on_act_key = on_action.clone();
+        let is_dark_theme = theme.is_dark;
+
+        // Main Shell with Global Keyboard Shortcuts
         let mut shell = div()
+            .track_focus(&self.focus_handle)
+            .key_context("OpenDragonShell")
             .size_full()
             .flex()
             .flex_row()
             .bg(theme.background)
             .relative()
+            .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                let is_ctrl =
+                    event.keystroke.modifiers.control || event.keystroke.modifiers.platform;
+                if is_ctrl {
+                    match event.keystroke.key.as_str() {
+                        "1" => on_act_key(DeviceAction::Navigate(Page::Overview), window, cx),
+                        "2" => on_act_key(DeviceAction::Navigate(Page::Lighting), window, cx),
+                        "3" => on_act_key(DeviceAction::Navigate(Page::Performance), window, cx),
+                        "4" => on_act_key(DeviceAction::Navigate(Page::Profiles), window, cx),
+                        "5" => on_act_key(DeviceAction::Navigate(Page::Macros), window, cx),
+                        "6" => on_act_key(DeviceAction::Navigate(Page::Home), window, cx),
+                        "7" => on_act_key(DeviceAction::Navigate(Page::Diagnostics), window, cx),
+                        "8" => on_act_key(DeviceAction::Navigate(Page::Settings), window, cx),
+                        "r" | "R" => on_act_key(DeviceAction::RefreshDevices, window, cx),
+                        "t" | "T" => {
+                            let next_mode = if is_dark_theme {
+                                crate::theme::ThemeMode::Light
+                            } else {
+                                crate::theme::ThemeMode::Dark
+                            };
+                            on_act_key(DeviceAction::SetThemeMode(next_mode), window, cx);
+                        }
+                        _ => {}
+                    }
+                } else if event.keystroke.key == "escape" {
+                    on_act_key(DeviceAction::ClearKeySelection, window, cx);
+                }
+            })
             .child(sidebar)
             .child(
                 div()
                     .id("page_scroll_area")
                     .flex_1()
                     .h_full()
-                    .overflow_y_scroll()
+                    .overflow_y_scrollbar()
                     .child(page_content),
             );
 

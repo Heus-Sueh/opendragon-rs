@@ -1,8 +1,9 @@
 use gpui::prelude::*;
 use gpui::*;
 
+use crate::services::preferences::KeyboardLayout;
 use crate::state::KeyboardVisualState;
-use crate::theme::{Theme, RADIUS_MD, RADIUS_SM, SPACE_2, SPACE_3};
+use crate::theme::{Theme, RADIUS_MD, RADIUS_SM, SPACE_1, SPACE_2, SPACE_3};
 
 #[derive(Debug, Clone)]
 struct KeyDef {
@@ -22,6 +23,8 @@ impl KeyDef {
 }
 
 pub type KeyClickHandler = std::sync::Arc<dyn Fn(u8, &mut Window, &mut App) + 'static>;
+pub type LayoutChangeHandler =
+    std::sync::Arc<dyn Fn(KeyboardLayout, &mut Window, &mut App) + 'static>;
 
 pub struct KeyboardPreview;
 
@@ -57,7 +60,7 @@ fn rgb_to_hsla(color: opendragon_core::color::RgbColor, alpha: f32) -> Hsla {
 }
 
 impl KeyboardPreview {
-    fn tkl_layout() -> Vec<Vec<Option<KeyDef>>> {
+    fn tkl_ansi_layout() -> Vec<Vec<Option<KeyDef>>> {
         vec![
             // Row 0: Function Row
             vec![
@@ -177,17 +180,423 @@ impl KeyboardPreview {
         ]
     }
 
+    fn tkl_abnt2_layout() -> Vec<Vec<Option<KeyDef>>> {
+        vec![
+            // Row 0: Function Row
+            vec![
+                Some(KeyDef::new(1, "Esc", 1.0)),
+                None,
+                Some(KeyDef::new(2, "F1", 1.0)),
+                Some(KeyDef::new(3, "F2", 1.0)),
+                Some(KeyDef::new(4, "F3", 1.0)),
+                Some(KeyDef::new(5, "F4", 1.0)),
+                None,
+                Some(KeyDef::new(6, "F5", 1.0)),
+                Some(KeyDef::new(7, "F6", 1.0)),
+                Some(KeyDef::new(8, "F7", 1.0)),
+                Some(KeyDef::new(9, "F8", 1.0)),
+                None,
+                Some(KeyDef::new(10, "F9", 1.0)),
+                Some(KeyDef::new(11, "F10", 1.0)),
+                Some(KeyDef::new(12, "F11", 1.0)),
+                Some(KeyDef::new(13, "F12", 1.0)),
+                None,
+                Some(KeyDef::new(14, "Prt", 1.0)),
+                Some(KeyDef::new(15, "Scr", 1.0)),
+                Some(KeyDef::new(16, "Pau", 1.0)),
+            ],
+            // Row 1: Numbers (ABNT2: ' " no primeiro slot)
+            vec![
+                Some(KeyDef::new(17, "' \"", 1.0)),
+                Some(KeyDef::new(18, "1", 1.0)),
+                Some(KeyDef::new(19, "2", 1.0)),
+                Some(KeyDef::new(20, "3", 1.0)),
+                Some(KeyDef::new(21, "4", 1.0)),
+                Some(KeyDef::new(22, "5", 1.0)),
+                Some(KeyDef::new(23, "6", 1.0)),
+                Some(KeyDef::new(24, "7", 1.0)),
+                Some(KeyDef::new(25, "8", 1.0)),
+                Some(KeyDef::new(26, "9", 1.0)),
+                Some(KeyDef::new(27, "0", 1.0)),
+                Some(KeyDef::new(28, "- _", 1.0)),
+                Some(KeyDef::new(29, "= +", 1.0)),
+                Some(KeyDef::new(30, "Bksp", 2.0)),
+                None,
+                Some(KeyDef::new(31, "Ins", 1.0)),
+                Some(KeyDef::new(32, "Hom", 1.0)),
+                Some(KeyDef::new(33, "PgU", 1.0)),
+            ],
+            // Row 2: QWERTY ABNT2 (´ ` e [ {)
+            vec![
+                Some(KeyDef::new(34, "Tab", 1.5)),
+                Some(KeyDef::new(35, "Q", 1.0)),
+                Some(KeyDef::new(36, "W", 1.0)),
+                Some(KeyDef::new(37, "E", 1.0)),
+                Some(KeyDef::new(38, "R", 1.0)),
+                Some(KeyDef::new(39, "T", 1.0)),
+                Some(KeyDef::new(40, "Y", 1.0)),
+                Some(KeyDef::new(41, "U", 1.0)),
+                Some(KeyDef::new(42, "I", 1.0)),
+                Some(KeyDef::new(43, "O", 1.0)),
+                Some(KeyDef::new(44, "P", 1.0)),
+                Some(KeyDef::new(45, "´ `", 1.0)),
+                Some(KeyDef::new(46, "[ {", 1.0)),
+                Some(KeyDef::new(47, "Enter", 1.5)),
+                None,
+                Some(KeyDef::new(48, "Del", 1.0)),
+                Some(KeyDef::new(49, "End", 1.0)),
+                Some(KeyDef::new(50, "PgD", 1.0)),
+            ],
+            // Row 3: Home Row ABNT2 (Ç, ~ ^, ] })
+            vec![
+                Some(KeyDef::new(51, "Caps", 1.75)),
+                Some(KeyDef::new(52, "A", 1.0)),
+                Some(KeyDef::new(53, "S", 1.0)),
+                Some(KeyDef::new(54, "D", 1.0)),
+                Some(KeyDef::new(55, "F", 1.0)),
+                Some(KeyDef::new(56, "G", 1.0)),
+                Some(KeyDef::new(57, "H", 1.0)),
+                Some(KeyDef::new(58, "J", 1.0)),
+                Some(KeyDef::new(59, "K", 1.0)),
+                Some(KeyDef::new(60, "L", 1.0)),
+                Some(KeyDef::new(61, "Ç", 1.0)),
+                Some(KeyDef::new(62, "~ ^", 1.0)),
+                Some(KeyDef::new(88, "] }", 1.0)),
+                Some(KeyDef::new(63, "Enter", 1.25)),
+            ],
+            // Row 4: Shift Row ABNT2 (Short Shift 1.25u + \ | + / ? ° + Shift 1.75u)
+            vec![
+                Some(KeyDef::new(64, "Shift", 1.25)),
+                Some(KeyDef::new(89, "\\ |", 1.0)),
+                Some(KeyDef::new(65, "Z", 1.0)),
+                Some(KeyDef::new(66, "X", 1.0)),
+                Some(KeyDef::new(67, "C", 1.0)),
+                Some(KeyDef::new(68, "V", 1.0)),
+                Some(KeyDef::new(69, "B", 1.0)),
+                Some(KeyDef::new(70, "N", 1.0)),
+                Some(KeyDef::new(71, "M", 1.0)),
+                Some(KeyDef::new(72, ", <", 1.0)),
+                Some(KeyDef::new(73, ". >", 1.0)),
+                Some(KeyDef::new(74, "; :", 1.0)),
+                Some(KeyDef::new(90, "/ ?", 1.0)),
+                Some(KeyDef::new(75, "Shift", 1.75)),
+                None,
+                None,
+                Some(KeyDef::new(76, "▲", 1.0)),
+                None,
+            ],
+            // Row 5: Bottom Row ABNT2 (AltGr)
+            vec![
+                Some(KeyDef::new(77, "Ctrl", 1.25)),
+                Some(KeyDef::new(78, "Win", 1.25)),
+                Some(KeyDef::new(79, "Alt", 1.25)),
+                Some(KeyDef::new(80, "Space", 6.25)),
+                Some(KeyDef::new(81, "AltGr", 1.25)),
+                Some(KeyDef::new(82, "Fn", 1.25)),
+                Some(KeyDef::new(83, "Menu", 1.25)),
+                Some(KeyDef::new(84, "Ctrl", 1.25)),
+                None,
+                Some(KeyDef::new(85, "◀", 1.0)),
+                Some(KeyDef::new(86, "▼", 1.0)),
+                Some(KeyDef::new(87, "▶", 1.0)),
+            ],
+        ]
+    }
+
+    fn tkl_iso_layout() -> Vec<Vec<Option<KeyDef>>> {
+        vec![
+            // Row 0: Function Row
+            vec![
+                Some(KeyDef::new(1, "Esc", 1.0)),
+                None,
+                Some(KeyDef::new(2, "F1", 1.0)),
+                Some(KeyDef::new(3, "F2", 1.0)),
+                Some(KeyDef::new(4, "F3", 1.0)),
+                Some(KeyDef::new(5, "F4", 1.0)),
+                None,
+                Some(KeyDef::new(6, "F5", 1.0)),
+                Some(KeyDef::new(7, "F6", 1.0)),
+                Some(KeyDef::new(8, "F7", 1.0)),
+                Some(KeyDef::new(9, "F8", 1.0)),
+                None,
+                Some(KeyDef::new(10, "F9", 1.0)),
+                Some(KeyDef::new(11, "F10", 1.0)),
+                Some(KeyDef::new(12, "F11", 1.0)),
+                Some(KeyDef::new(13, "F12", 1.0)),
+                None,
+                Some(KeyDef::new(14, "Prt", 1.0)),
+                Some(KeyDef::new(15, "Scr", 1.0)),
+                Some(KeyDef::new(16, "Pau", 1.0)),
+            ],
+            // Row 1: Numbers
+            vec![
+                Some(KeyDef::new(17, "` ¬", 1.0)),
+                Some(KeyDef::new(18, "1", 1.0)),
+                Some(KeyDef::new(19, "2", 1.0)),
+                Some(KeyDef::new(20, "3", 1.0)),
+                Some(KeyDef::new(21, "4", 1.0)),
+                Some(KeyDef::new(22, "5", 1.0)),
+                Some(KeyDef::new(23, "6", 1.0)),
+                Some(KeyDef::new(24, "7", 1.0)),
+                Some(KeyDef::new(25, "8", 1.0)),
+                Some(KeyDef::new(26, "9", 1.0)),
+                Some(KeyDef::new(27, "0", 1.0)),
+                Some(KeyDef::new(28, "-", 1.0)),
+                Some(KeyDef::new(29, "=", 1.0)),
+                Some(KeyDef::new(30, "Bksp", 2.0)),
+                None,
+                Some(KeyDef::new(31, "Ins", 1.0)),
+                Some(KeyDef::new(32, "Hom", 1.0)),
+                Some(KeyDef::new(33, "PgU", 1.0)),
+            ],
+            // Row 2: QWERTY ISO
+            vec![
+                Some(KeyDef::new(34, "Tab", 1.5)),
+                Some(KeyDef::new(35, "Q", 1.0)),
+                Some(KeyDef::new(36, "W", 1.0)),
+                Some(KeyDef::new(37, "E", 1.0)),
+                Some(KeyDef::new(38, "R", 1.0)),
+                Some(KeyDef::new(39, "T", 1.0)),
+                Some(KeyDef::new(40, "Y", 1.0)),
+                Some(KeyDef::new(41, "U", 1.0)),
+                Some(KeyDef::new(42, "I", 1.0)),
+                Some(KeyDef::new(43, "O", 1.0)),
+                Some(KeyDef::new(44, "P", 1.0)),
+                Some(KeyDef::new(45, "[ {", 1.0)),
+                Some(KeyDef::new(46, "] }", 1.0)),
+                Some(KeyDef::new(47, "Enter", 1.5)),
+                None,
+                Some(KeyDef::new(48, "Del", 1.0)),
+                Some(KeyDef::new(49, "End", 1.0)),
+                Some(KeyDef::new(50, "PgD", 1.0)),
+            ],
+            // Row 3: Home Row ISO (com # ~ e Enter ISO)
+            vec![
+                Some(KeyDef::new(51, "Caps", 1.75)),
+                Some(KeyDef::new(52, "A", 1.0)),
+                Some(KeyDef::new(53, "S", 1.0)),
+                Some(KeyDef::new(54, "D", 1.0)),
+                Some(KeyDef::new(55, "F", 1.0)),
+                Some(KeyDef::new(56, "G", 1.0)),
+                Some(KeyDef::new(57, "H", 1.0)),
+                Some(KeyDef::new(58, "J", 1.0)),
+                Some(KeyDef::new(59, "K", 1.0)),
+                Some(KeyDef::new(60, "L", 1.0)),
+                Some(KeyDef::new(61, "; :", 1.0)),
+                Some(KeyDef::new(62, "' @", 1.0)),
+                Some(KeyDef::new(88, "# ~", 1.0)),
+                Some(KeyDef::new(63, "Enter", 1.25)),
+            ],
+            // Row 4: Shift Row ISO (Short Shift 1.25u + \ | + Shift 2.75u)
+            vec![
+                Some(KeyDef::new(64, "Shift", 1.25)),
+                Some(KeyDef::new(89, "\\ |", 1.0)),
+                Some(KeyDef::new(65, "Z", 1.0)),
+                Some(KeyDef::new(66, "X", 1.0)),
+                Some(KeyDef::new(67, "C", 1.0)),
+                Some(KeyDef::new(68, "V", 1.0)),
+                Some(KeyDef::new(69, "B", 1.0)),
+                Some(KeyDef::new(70, "N", 1.0)),
+                Some(KeyDef::new(71, "M", 1.0)),
+                Some(KeyDef::new(72, ", <", 1.0)),
+                Some(KeyDef::new(73, ". >", 1.0)),
+                Some(KeyDef::new(74, "/ ?", 1.0)),
+                Some(KeyDef::new(75, "Shift", 2.75)),
+                None,
+                None,
+                Some(KeyDef::new(76, "▲", 1.0)),
+                None,
+            ],
+            // Row 5: Bottom Row ISO
+            vec![
+                Some(KeyDef::new(77, "Ctrl", 1.25)),
+                Some(KeyDef::new(78, "Win", 1.25)),
+                Some(KeyDef::new(79, "Alt", 1.25)),
+                Some(KeyDef::new(80, "Space", 6.25)),
+                Some(KeyDef::new(81, "AltGr", 1.25)),
+                Some(KeyDef::new(82, "Fn", 1.25)),
+                Some(KeyDef::new(83, "Menu", 1.25)),
+                Some(KeyDef::new(84, "Ctrl", 1.25)),
+                None,
+                Some(KeyDef::new(85, "◀", 1.0)),
+                Some(KeyDef::new(86, "▼", 1.0)),
+                Some(KeyDef::new(87, "▶", 1.0)),
+            ],
+        ]
+    }
+
+    fn tkl_layout(layout: KeyboardLayout) -> Vec<Vec<Option<KeyDef>>> {
+        match layout {
+            KeyboardLayout::Ansi => Self::tkl_ansi_layout(),
+            KeyboardLayout::Abnt2 => Self::tkl_abnt2_layout(),
+            KeyboardLayout::Iso => Self::tkl_iso_layout(),
+        }
+    }
+
     pub fn render(
         visual_state: &KeyboardVisualState,
         theme: &Theme,
+        layout: KeyboardLayout,
         on_key_click: Option<KeyClickHandler>,
-        on_key_drag: Option<KeyClickHandler>,
+        on_layout_change: Option<LayoutChangeHandler>,
     ) -> Div {
         let base_unit = 36.0;
         let global_rgb = visual_state.global_lighting.color;
-        let global_hsla = rgb_to_hsla(global_rgb, 0.85);
+        let global_hsla = rgb_to_hsla(global_rgb, 0.95);
+        let diffuse_glow = rgb_to_hsla(global_rgb, 0.20);
 
-        let layout = Self::tkl_layout();
+        let key_rows = Self::tkl_layout(layout);
+
+        // Layout Switcher Pill Group
+        let layout_pills = {
+            let layouts = [
+                (KeyboardLayout::Ansi, "ANSI"),
+                (KeyboardLayout::Abnt2, "ABNT2"),
+                (KeyboardLayout::Iso, "ISO"),
+            ];
+            let mut p_row = div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(2.0))
+                .p(px(2.0))
+                .rounded(RADIUS_SM)
+                .bg(theme.surface_active)
+                .border_1()
+                .border_color(theme.border_subtle);
+
+            for (l, name) in layouts {
+                let is_active = layout == l;
+                let on_lc = on_layout_change.clone();
+                let mut pill = div()
+                    .px(px(6.0))
+                    .py(px(2.0))
+                    .rounded(RADIUS_SM)
+                    .text_size(px(9.0))
+                    .font_weight(if is_active {
+                        FontWeight::BOLD
+                    } else {
+                        FontWeight::MEDIUM
+                    })
+                    .text_color(if is_active {
+                        theme.accent_foreground
+                    } else {
+                        theme.foreground_muted
+                    })
+                    .bg(if is_active {
+                        theme.accent
+                    } else {
+                        gpui::transparent_black()
+                    })
+                    .cursor_pointer();
+
+                if let Some(cb) = on_lc {
+                    pill = pill.on_mouse_down(MouseButton::Left, move |_e, w, a| {
+                        cb(l, w, a);
+                    });
+                }
+
+                p_row = p_row.child(pill.child(name));
+            }
+            p_row
+        };
+
+        // Top Hardware Plate Header: Engraved Redragon badge + Layout Switcher + Hardware Lock Status LEDs
+        let plate_header = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .w_full()
+            .pb(SPACE_2)
+            .border_b_1()
+            .border_color(theme.border_subtle)
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(SPACE_2)
+                    .child(
+                        div()
+                            .text_color(theme.accent)
+                            .text_size(px(11.0))
+                            .font_weight(FontWeight::BOLD)
+                            .child("REDRAGON"),
+                    )
+                    .child(
+                        div()
+                            .text_color(theme.foreground_subtle)
+                            .text_size(px(10.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("KUMARA PRO • K552RGB-PRO • HALL EFFECT"),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(SPACE_3)
+                    .child(layout_pills)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(3.0))
+                            .child(div().w(px(5.0)).h(px(5.0)).rounded_full().bg(global_hsla))
+                            .child(
+                                div()
+                                    .text_color(theme.foreground_subtle)
+                                    .text_size(px(8.0))
+                                    .font_weight(FontWeight::BOLD)
+                                    .child("CAPS"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(3.0))
+                            .child(
+                                div()
+                                    .w(px(5.0))
+                                    .h(px(5.0))
+                                    .rounded_full()
+                                    .bg(theme.border_subtle),
+                            )
+                            .child(
+                                div()
+                                    .text_color(theme.foreground_subtle)
+                                    .text_size(px(8.0))
+                                    .font_weight(FontWeight::BOLD)
+                                    .child("SCRL"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(3.0))
+                            .child(
+                                div()
+                                    .w(px(5.0))
+                                    .h(px(5.0))
+                                    .rounded_full()
+                                    .bg(theme.border_subtle),
+                            )
+                            .child(
+                                div()
+                                    .text_color(theme.foreground_subtle)
+                                    .text_size(px(8.0))
+                                    .font_weight(FontWeight::BOLD)
+                                    .child("WIN"),
+                            ),
+                    ),
+            );
 
         let mut keyboard_chassis = div()
             .flex()
@@ -196,10 +605,11 @@ impl KeyboardPreview {
             .p(SPACE_3)
             .rounded(RADIUS_MD)
             .bg(theme.surface_elevated)
-            .border_1()
-            .border_color(theme.border);
+            .border_2()
+            .border_color(theme.border)
+            .child(plate_header);
 
-        for row in layout {
+        for row in key_rows {
             let mut row_el = div().flex().flex_row().items_center().gap(px(4.0));
 
             for maybe_key in row {
@@ -208,12 +618,12 @@ impl KeyboardPreview {
                         let key_w = px(key.width_units * base_unit + (key.width_units - 1.0) * 4.0);
                         let is_selected = visual_state.selected_keys.contains(&key.id);
 
-                        let key_color =
-                            if let Some(custom) = visual_state.per_key_colors.get(&key.id) {
-                                rgb_to_hsla(*custom, 0.9)
-                            } else {
-                                global_hsla
-                            };
+                        let key_led = if let Some(custom) = visual_state.per_key_colors.get(&key.id)
+                        {
+                            rgb_to_hsla(*custom, 0.95)
+                        } else {
+                            global_hsla
+                        };
 
                         let key_bg = if is_selected {
                             theme.surface_active
@@ -223,7 +633,7 @@ impl KeyboardPreview {
                             hsla(0.0, 0.0, 1.0, 1.0)
                         };
 
-                        let mut key_el = div()
+                        let key_el = div()
                             .w(key_w)
                             .h(px(34.0))
                             .rounded(RADIUS_SM)
@@ -239,36 +649,33 @@ impl KeyboardPreview {
                             .justify_between()
                             .p(px(2.0))
                             .cursor_pointer()
-                            .child(
-                                // RGB backlight LED indicator bar
-                                div().w_full().h(px(2.0)).rounded(RADIUS_SM).bg(key_color),
-                            )
+                            .child(div().w_full().h(px(2.0)).rounded_full().bg(key_led))
                             .child(
                                 div()
                                     .w_full()
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .text_color(theme.foreground)
+                                    .text_color(if is_selected {
+                                        theme.accent
+                                    } else {
+                                        theme.foreground
+                                    })
                                     .text_size(px(10.0))
-                                    .font_weight(FontWeight::MEDIUM)
+                                    .font_weight(if is_selected {
+                                        FontWeight::BOLD
+                                    } else {
+                                        FontWeight::MEDIUM
+                                    })
                                     .child(key.label),
                             );
 
                         let kid = key.id;
+                        let mut key_el = key_el.id(ElementId::NamedInteger("k".into(), kid as u64));
                         if let Some(handler) = &on_key_click {
                             let cb = handler.clone();
                             key_el = key_el.on_mouse_down(MouseButton::Left, move |_e, w, a| {
                                 cb(kid, w, a);
-                            });
-                        }
-
-                        if let Some(drag_handler) = &on_key_drag {
-                            let cb_drag = drag_handler.clone();
-                            key_el = key_el.on_mouse_move(move |e, w, a| {
-                                if e.pressed_button == Some(MouseButton::Left) {
-                                    cb_drag(kid, w, a);
-                                }
                             });
                         }
 
@@ -283,6 +690,16 @@ impl KeyboardPreview {
 
             keyboard_chassis = keyboard_chassis.child(row_el);
         }
+
+        // Bottom underglow ambient halo
+        keyboard_chassis = keyboard_chassis.child(
+            div()
+                .mt(SPACE_1)
+                .w_full()
+                .h(px(2.0))
+                .rounded_full()
+                .bg(diffuse_glow),
+        );
 
         div()
             .flex()

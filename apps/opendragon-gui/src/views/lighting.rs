@@ -4,11 +4,11 @@ use gpui::*;
 use opendragon_core::color::RgbColor;
 use opendragon_core::lighting::{LightingConfig, LightingMode};
 
-use crate::components::{Card, InfoTooltip, Slider};
-use crate::state::AppState;
+use crate::components::{Card, InfoTooltip, KeyboardPreview, MousePreview, Slider};
+use crate::state::{AppState, DeviceAction};
 use crate::theme::{
     CONTROL_HEIGHT_SM, FONT_SIZE_BODY, FONT_SIZE_CAPTION, FONT_SIZE_HEADING, FONT_SIZE_SM,
-    FONT_SIZE_TITLE, RADIUS_SM, SPACE_1, SPACE_12, SPACE_2, SPACE_3, SPACE_4, SPACE_6,
+    FONT_SIZE_TITLE, RADIUS_MD, RADIUS_SM, SPACE_1, SPACE_12, SPACE_2, SPACE_3, SPACE_4, SPACE_6,
 };
 
 pub struct LightingView;
@@ -16,8 +16,12 @@ pub struct LightingView;
 impl LightingView {
     pub fn render(
         state: &AppState,
-        on_update_lighting: impl Fn(LightingConfig, &mut Window, &mut App) + 'static + Clone,
+        on_action: impl Fn(DeviceAction, &mut Window, &mut App) + 'static + Clone,
     ) -> Div {
+        let on_act = on_action.clone();
+        let on_update_lighting = move |cfg: LightingConfig, w: &mut Window, a: &mut App| {
+            on_act(DeviceAction::UpdateLighting(cfg), w, a);
+        };
         let theme = &state.theme;
         let active = match &state.active_device {
             Some(dev) => dev,
@@ -73,6 +77,61 @@ impl LightingView {
                     ),
             )
             .child(InfoTooltip::new("EVision HID Lighting Protocol").render(theme));
+
+        let is_mouse = active
+            .summary
+            .capabilities
+            .contains(&opendragon_core::capability::Capability::Dpi)
+            && !active
+                .summary
+                .capabilities
+                .contains(&opendragon_core::capability::Capability::Actuation);
+
+        let hardware_canvas = if is_mouse {
+            let on_act_btn = on_action.clone();
+            let mouse_click_handler =
+                std::sync::Arc::new(move |btn_id: u8, w: &mut Window, a: &mut App| {
+                    on_act_btn(DeviceAction::ToggleKeySelection(btn_id), w, a);
+                });
+            MousePreview::render(
+                &active.visual_state,
+                active.dpi,
+                theme,
+                Some(mouse_click_handler),
+            )
+        } else {
+            let on_act_kc = on_action.clone();
+            let key_click_handler =
+                std::sync::Arc::new(move |key_id: u8, w: &mut Window, a: &mut App| {
+                    on_act_kc(DeviceAction::ToggleKeySelection(key_id), w, a);
+                });
+
+            let on_act_layout = on_action.clone();
+            let layout_change_handler =
+                std::sync::Arc::new(move |layout, w: &mut Window, a: &mut App| {
+                    on_act_layout(DeviceAction::SetKeyboardLayout(layout), w, a);
+                });
+
+            KeyboardPreview::render(
+                &active.visual_state,
+                theme,
+                state.preferences.keyboard_layout,
+                Some(key_click_handler),
+                Some(layout_change_handler),
+            )
+        };
+
+        let canvas_stage = div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .w_full()
+            .p(SPACE_3)
+            .rounded(RADIUS_MD)
+            .bg(theme.surface_elevated)
+            .border_1()
+            .border_color(theme.border_subtle)
+            .child(hardware_canvas);
 
         // Grouped Mode Categories for all 18 K552RGB-PRO Hardware Effects
         let mode_categories = [
@@ -147,7 +206,7 @@ impl LightingView {
                         }
                     })
                     .text_color(if is_active {
-                        hsla(0.0, 0.0, 1.0, 1.0)
+                        theme.accent_foreground
                     } else {
                         theme.foreground
                     })
@@ -295,7 +354,10 @@ impl LightingView {
             let on_upd_r = on_update_lighting.clone();
             let base_cfg_r = current_cfg.clone();
             let red_slider = Slider::new("Red (R)", current_cfg.color.r as f32, 0.0, 255.0)
+                .flat(true)
                 .step(1.0)
+                .max_width(px(520.0))
+                .accent_color(hsla(0.0, 0.85, 0.55, 1.0))
                 .presets([
                     (0.0, "0"),
                     (64.0, "64"),
@@ -313,7 +375,10 @@ impl LightingView {
             let on_upd_g = on_update_lighting.clone();
             let base_cfg_g = current_cfg.clone();
             let green_slider = Slider::new("Green (G)", current_cfg.color.g as f32, 0.0, 255.0)
+                .flat(true)
                 .step(1.0)
+                .max_width(px(520.0))
+                .accent_color(hsla(140.0, 0.70, 0.45, 1.0))
                 .presets([
                     (0.0, "0"),
                     (64.0, "64"),
@@ -331,7 +396,10 @@ impl LightingView {
             let on_upd_b = on_update_lighting.clone();
             let base_cfg_b = current_cfg.clone();
             let blue_slider = Slider::new("Blue (B)", current_cfg.color.b as f32, 0.0, 255.0)
+                .flat(true)
                 .step(1.0)
+                .max_width(px(520.0))
+                .accent_color(hsla(215.0, 0.85, 0.55, 1.0))
                 .presets([
                     (0.0, "0"),
                     (64.0, "64"),
@@ -395,10 +463,11 @@ impl LightingView {
                                 .flex()
                                 .flex_col()
                                 .gap(SPACE_3)
+                                .max_w(px(560.0))
                                 .child(
                                     div()
-                                        .text_color(theme.text_muted)
-                                        .text_size(px(12.0))
+                                        .text_color(theme.foreground_muted)
+                                        .text_size(FONT_SIZE_SM)
                                         .font_weight(FontWeight::MEDIUM)
                                         .child("Fine-tune individual RGB channels (0 to 255):"),
                                 )
@@ -423,6 +492,7 @@ impl LightingView {
             let slider = Slider::new("LED Brightness", current_cfg.brightness as f32, 0.0, 100.0)
                 .step(5.0)
                 .unit("%")
+                .max_width(px(560.0))
                 .presets([
                     (0.0, "Off (0%)"),
                     (25.0, "25%"),
@@ -461,6 +531,7 @@ impl LightingView {
             let slider = Slider::new("Effect Animation Speed", speed_level, 1.0, 5.0)
                 .step(1.0)
                 .unit(" / 5")
+                .max_width(px(560.0))
                 .presets([
                     (1.0, "1 (Slowest)"),
                     (2.0, "2 (Slow)"),
@@ -480,85 +551,6 @@ impl LightingView {
             None
         };
 
-        // Comprehensive Lighting Effects Guide Card for all 18 Modes
-        let guide_items = [
-            ("💡 Static", "Solid continuous illumination in selected color. Maximum contrast and zero visual distraction for coding and nocturnal typing."),
-            ("🫁 Breathing", "Smooth rhythmic intensity pulsing. LEDs gently fade in and out in a calm breathing cycle."),
-            ("🌊 Wave", "Fluid waves of RGB colors flowing continuously across the keyboard at the chosen speed."),
-            ("🌈 Rainbow", "Seamless chromatic spectrum loop shifting smoothly across all visible colors."),
-            ("⚡ Reactive", "Key reactive: switch lights up instantly the millisecond it is pressed and softly fades on release."),
-            ("💧 Ripple", "Concentric radial wave: each keystroke sends a circular ripple of light spreading outwards across adjacent keys."),
-            ("✨ Flash / Stars", "Starlight scintillation: individual keys randomly twinkle and pulse like distant stars in a night sky."),
-            ("🏃 Line Reactive (Go Without Trace)", "Beam reactive trail: illumination dissipates rapidly along keys following the stroke direction."),
-            ("🎡 Color Wheel (Wheel)", "Continuous 360-degree rotational spectrum shifting across the perimeter of the keyboard."),
-            ("🌸 Blooming", "Harmonic radial blooms expanding outward from keyboard center towards outer edges."),
-            ("↕️ Vertical Wave", "Color bands sweeping vertically down (or up) across key rows like an illuminated waterfall."),
-            ("🌀 Whirlpool / Hurricane", "Dynamic vortex animation where colors spin rapidly in an energetic spiral pattern."),
-            ("🪜 Cascade (Accumulate)", "Stacking cascade where illuminated drops descend and accumulate row by row until refreshed."),
-            ("🌧️ Digital Rain (Matrix Rain)", "Vertical drops falling across key columns simulating digital code rain."),
-            ("🚨 Visor Scanner (Knight Rider)", "Focused horizontal light beam oscillating back and forth across keys."),
-            ("💥 Collision (Surmount)", "Wavefronts traveling inward from opposing edges, colliding at the center, and bouncing back."),
-            ("⭕ Rainbow Circle", "Concentric rainbow rings rhythmically expanding and contracting across the chassis."),
-            ("🎨 Per-Key Custom", "Individual per-switch color customization with independent key backlighting."),
-            ("🌑 Backlight Off", "Shuts down all LED backlighting. Conserves power and provides pitch-black stealth operation."),
-        ];
-
-        let mut guide_list = div().flex().flex_col().gap(SPACE_2).w_full();
-        for (name, desc) in guide_items {
-            let row = div()
-                .flex()
-                .flex_col()
-                .gap(px(2.0))
-                .p(SPACE_2)
-                .rounded(RADIUS_SM)
-                .bg(theme.surface_hover)
-                .child(
-                    div()
-                        .text_color(theme.foreground)
-                        .text_size(FONT_SIZE_SM)
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(name),
-                )
-                .child(
-                    div()
-                        .text_color(theme.foreground_muted)
-                        .text_size(FONT_SIZE_CAPTION)
-                        .child(desc),
-                );
-            guide_list = guide_list.child(row);
-        }
-
-        let guide_card = Card::new()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(SPACE_3)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .justify_between()
-                            .child(
-                                div()
-                                    .text_color(theme.foreground)
-                                    .text_size(FONT_SIZE_HEADING)
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Hardware Lighting Effects Reference"),
-                            )
-                            .child(InfoTooltip::new("All 18 Sonix EVision modes").render(theme)),
-                    )
-                    .child(
-                        div()
-                            .text_color(theme.foreground_muted)
-                            .text_size(FONT_SIZE_SM)
-                            .child("Overview of behavior and visual characteristics for each hardware-native lighting mode:"),
-                    )
-                    .child(guide_list),
-            )
-            .render(theme);
-
         let mut content = div()
             .flex()
             .flex_col()
@@ -566,6 +558,7 @@ impl LightingView {
             .w_full()
             .max_w(crate::theme::CONTENT_MAX_WIDTH)
             .child(header)
+            .child(canvas_stage)
             .child(mode_card)
             .child(spotlight_card);
 
@@ -578,8 +571,6 @@ impl LightingView {
         if let Some(sc) = speed_card {
             content = content.child(sc);
         }
-
-        content = content.child(guide_card);
 
         // Uses min_h_full() to allow vertical scrolling when content overflows
         div()
